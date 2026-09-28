@@ -10,6 +10,7 @@ namespace ERP
     {
         private readonly DonVanChuyenBLL bll = new DonVanChuyenBLL();
         private readonly string idDonVCToEdit;
+        private string trangThaiBanDau = string.Empty;
 
         public FrmSuaDonVanChuyen(string idDonVC)
         {
@@ -19,6 +20,10 @@ namespace ERP
 
         private void FrmSuaDonVanChuyen_Load(object sender, EventArgs e)
         {
+            UIThemeHelper.ApplyFormStyle(this);
+            UIThemeHelper.ApplyActionButton(this.btnLuu, ButtonRole.Primary);
+            UIThemeHelper.ApplyActionButton(this.btnHuy, ButtonRole.Secondary);
+
             LoadDanhMuc();
             LoadThongTinDon();
         }
@@ -27,18 +32,18 @@ namespace ERP
         {
             try
             {
-                // 1. Điểm vận chuyển
-                List<string> dsDVC = bll.LayDanhSachDVC();
+                // 1. Điểm vận chuyển (hiển thị Tên thay vì Mã)
+                List<DiemVanChuyenComboItem> dsDVC = bll.LayDanhSachDiemVanChuyenCombo();
                 cboMaDVC.Items.Clear();
-                foreach (string dvc in dsDVC)
+                foreach (DiemVanChuyenComboItem dvc in dsDVC)
                 {
                     cboMaDVC.Items.Add(dvc);
                 }
 
-                // 2. Xe khả dụng
-                List<string> dsXe = bll.LayDanhSachXeKhaDung();
+                // 2. Xe khả dụng kèm tải trọng
+                List<XeKhaDungItem> dsXe = bll.LayDanhSachXeKhaDungKemTaiTrong();
                 cboBienSoXe.Items.Clear();
-                foreach (string xe in dsXe)
+                foreach (XeKhaDungItem xe in dsXe)
                 {
                     cboBienSoXe.Items.Add(xe);
                 }
@@ -64,14 +69,70 @@ namespace ERP
                 DonVanChuyen don = bll.LayDonTheoID(idDonVCToEdit);
                 if (don != null)
                 {
+                    // 1. Đơn hàng Bán hàng
+                    if (!string.IsNullOrWhiteSpace(don.ID_DH))
+                    {
+                        txtDonHang.Text = !string.IsNullOrWhiteSpace(don.TenKhachHang)
+                            ? $"{don.ID_DH} | {don.TenKhachHang}"
+                            : don.ID_DH;
+                    }
+                    else
+                    {
+                        txtDonHang.Text = "-- Không chọn đơn hàng (Giao tự do) --";
+                        txtDonHang.ForeColor = System.Drawing.Color.Gray;
+                    }
+
+                    // 2. Mã đơn VC
                     txtIDDonVC.Text = don.ID_DonVC;
 
-                    if (!cboMaDVC.Items.Contains(don.MaDVC)) cboMaDVC.Items.Add(don.MaDVC);
-                    cboMaDVC.SelectedItem = don.MaDVC;
+                    // 3. Điểm giao nhận
+                    bool dvcFound = false;
+                    foreach (object item in cboMaDVC.Items)
+                    {
+                        if (item is DiemVanChuyenComboItem dvcItem && dvcItem.MaDVC == don.MaDVC)
+                        {
+                            cboMaDVC.SelectedItem = item;
+                            dvcFound = true;
+                            break;
+                        }
+                    }
+                    if (!dvcFound && !string.IsNullOrEmpty(don.MaDVC))
+                    {
+                        DiemVanChuyenComboItem fallbackDvc = new DiemVanChuyenComboItem 
+                        { 
+                            MaDVC = don.MaDVC, 
+                            TenDVC = !string.IsNullOrWhiteSpace(don.TenDVC) ? don.TenDVC : don.MaDVC 
+                        };
+                        cboMaDVC.Items.Add(fallbackDvc);
+                        cboMaDVC.SelectedItem = fallbackDvc;
+                    }
 
-                    if (!cboBienSoXe.Items.Contains(don.BienSoXe)) cboBienSoXe.Items.Add(don.BienSoXe);
-                    cboBienSoXe.SelectedItem = don.BienSoXe;
+                    // 4. Địa chỉ giao
+                    txtDiaChiGiao.Text = !string.IsNullOrWhiteSpace(don.DiaChiGiao) 
+                        ? don.DiaChiGiao 
+                        : ((cboMaDVC.SelectedItem as DiemVanChuyenComboItem)?.DiaChiDVC ?? string.Empty);
 
+                    // 5. Phương tiện & Tải trọng xe
+                    bool xeFound = false;
+                    foreach (object item in cboBienSoXe.Items)
+                    {
+                        if (item is XeKhaDungItem xeItem && xeItem.BienSoXe == don.BienSoXe)
+                        {
+                            cboBienSoXe.SelectedItem = item;
+                            xeFound = true;
+                            break;
+                        }
+                    }
+                    if (!xeFound && !string.IsNullOrEmpty(don.BienSoXe))
+                    {
+                        XeKhaDungItem currentXe = bll.LayThongTinXe(don.BienSoXe) 
+                            ?? new XeKhaDungItem { BienSoXe = don.BienSoXe, LoaiXe = "Xe hiện tại", TaiTrong = 0 };
+                        cboBienSoXe.Items.Add(currentXe);
+                        cboBienSoXe.SelectedItem = currentXe;
+                    }
+                    CapNhatHienThiTaiTrongXe();
+
+                    // 6. Hàng hóa
                     bool spFound = false;
                     foreach (object item in cboSanPham.Items)
                     {
@@ -89,14 +150,51 @@ namespace ERP
                         cboSanPham.SelectedItem = fallbackItem;
                     }
 
+                    // 7. Số lượng giao
                     txtSoLuongGiao.Text = don.SoLuongGiao.ToString();
+
+                    // 8. Thời gian giao
                     if (don.ThoiGianKhoiHanh != DateTime.MinValue)
                     {
                         dtpThoiGianKhoiHanh.Value = don.ThoiGianKhoiHanh;
                     }
 
-                    if (!cboTrangThaiDon.Items.Contains(don.TrangThaiDon)) cboTrangThaiDon.Items.Add(don.TrangThaiDon);
-                    cboTrangThaiDon.SelectedItem = don.TrangThaiDon;
+                    // 9. Trạng thái
+                    trangThaiBanDau = don.TrangThaiDon ?? "Khởi tạo";
+                    cboTrangThaiDon.Items.Clear();
+
+                    if (trangThaiBanDau == "Hoàn thành")
+                    {
+                        cboTrangThaiDon.Items.Add("Hoàn thành");
+                        cboTrangThaiDon.SelectedIndex = 0;
+                        cboMaDVC.Enabled = false;
+                        cboBienSoXe.Enabled = false;
+                        dtpThoiGianKhoiHanh.Enabled = false;
+                        cboTrangThaiDon.Enabled = false;
+                        btnLuu.Enabled = false;
+                        btnLuu.Text = "🔒 Đã hoàn thành (Chỉ xem)";
+                    }
+                    else if (trangThaiBanDau == "Đã hủy")
+                    {
+                        cboTrangThaiDon.Items.Add("Đã hủy");
+                        cboTrangThaiDon.SelectedIndex = 0;
+                        cboMaDVC.Enabled = false;
+                        cboBienSoXe.Enabled = false;
+                        dtpThoiGianKhoiHanh.Enabled = false;
+                        cboTrangThaiDon.Enabled = false;
+                        btnLuu.Enabled = false;
+                        btnLuu.Text = "🚫 Đã hủy (Chỉ xem)";
+                    }
+                    else if (trangThaiBanDau == "Đang vận chuyển")
+                    {
+                        cboTrangThaiDon.Items.AddRange(new object[] { "Đang vận chuyển", "Hoàn thành", "Đã hủy" });
+                        cboTrangThaiDon.SelectedItem = "Đang vận chuyển";
+                    }
+                    else
+                    {
+                        cboTrangThaiDon.Items.AddRange(new object[] { "Khởi tạo", "Đang vận chuyển", "Đã hủy" });
+                        cboTrangThaiDon.SelectedItem = "Khởi tạo";
+                    }
                 }
                 else
                 {
@@ -110,10 +208,37 @@ namespace ERP
             }
         }
 
+        private void CapNhatHienThiTaiTrongXe()
+        {
+            if (cboBienSoXe.SelectedItem is XeKhaDungItem xe)
+            {
+                lblTaiTrongXe.Text = xe.TaiTrongKg > 0 
+                    ? $"🚛 Tải trọng tối đa: {xe.TaiTrongKg:N0} kg ({xe.LoaiXe})"
+                    : $"🚛 Xe được phân công: {xe.BienSoXe}";
+            }
+            else
+            {
+                lblTaiTrongXe.Text = "🚛 Tải trọng xe: Vui lòng chọn xe";
+            }
+        }
+
+        private void cboBienSoXe_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            CapNhatHienThiTaiTrongXe();
+        }
+
+        private void cboMaDVC_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cboMaDVC.SelectedItem is DiemVanChuyenComboItem diem)
+            {
+                txtDiaChiGiao.Text = !string.IsNullOrWhiteSpace(diem.DiaChiDVC) ? diem.DiaChiDVC : string.Empty;
+            }
+        }
+
         private void btnLuu_Click(object sender, EventArgs e)
         {
-            string maDVC = cboMaDVC.SelectedItem?.ToString();
-            string bienSo = cboBienSoXe.SelectedItem?.ToString();
+            string maDVC = (cboMaDVC.SelectedItem as DiemVanChuyenComboItem)?.MaDVC ?? cboMaDVC.SelectedItem?.ToString();
+            string bienSo = (cboBienSoXe.SelectedItem as XeKhaDungItem)?.BienSoXe ?? cboBienSoXe.SelectedItem?.ToString();
             string sanPham = (cboSanPham.SelectedItem as SanPhamComboItem)?.ID_SP ?? cboSanPham.SelectedItem?.ToString();
             string strSoLuong = txtSoLuongGiao.Text.Trim();
             DateTime thoiGianGiao = dtpThoiGianKhoiHanh.Value;
@@ -148,9 +273,36 @@ namespace ERP
                 return;
             }
 
+            if (trangThaiBanDau == "Hoàn thành")
+            {
+                MessageBox.Show("Đơn vận chuyển đã HOÀN THÀNH nên không thể chỉnh sửa!\n\nNếu khách hàng muốn đổi trả hàng, vui lòng sử dụng chức năng 'Quản lý trả hàng' để lập phiếu thu hồi.", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (trangThaiBanDau == "Đã hủy")
+            {
+                MessageBox.Show("Đơn vận chuyển đã ĐÃ HỦY nên không thể chỉnh sửa!", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(trangThai))
             {
                 trangThai = "Khởi tạo";
+            }
+
+            // Kiểm tra quy tắc chuyển trạng thái
+            if (trangThaiBanDau == "Khởi tạo" && trangThai == "Hoàn thành")
+            {
+                MessageBox.Show("Đơn vận chuyển chưa xuất phát ('Khởi tạo') không thể chuyển trực tiếp sang 'Hoàn thành'!\nVui lòng chuyển sang 'Đang vận chuyển' trước khi hoàn tất giao hàng.", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                cboTrangThaiDon.Focus();
+                return;
+            }
+
+            if (trangThaiBanDau == "Đang vận chuyển" && trangThai == "Khởi tạo")
+            {
+                MessageBox.Show("Đơn vận chuyển đã rời kho ('Đang vận chuyển') không thể quay ngược về trạng thái 'Khởi tạo'!", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                cboTrangThaiDon.Focus();
+                return;
             }
 
             if (trangThai == "Đang vận chuyển")
@@ -165,9 +317,20 @@ namespace ERP
 
             try
             {
+                string idDH = null;
+                if (!string.IsNullOrWhiteSpace(txtDonHang.Text))
+                {
+                    string[] parts = txtDonHang.Text.Split('|');
+                    if (parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
+                    {
+                        idDH = parts[0].Trim();
+                    }
+                }
+
                 DonVanChuyen don = new DonVanChuyen
                 {
                     ID_DonVC = idDonVCToEdit,
+                    ID_DH = idDH,
                     MaDVC = maDVC,
                     BienSoXe = bienSo,
                     ID_SP = sanPham,

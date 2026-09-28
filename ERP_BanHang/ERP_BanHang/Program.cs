@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using OfficeOpenXml;
 
@@ -6,11 +6,14 @@ namespace ERP_BanHang
 {
     internal static class Program
     {
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
         [STAThread]
         static void Main()
         {
             // Thiết lập LicenseContext chuẩn, tương thích với hầu hết các bản EPPlus
-            try { ExcelPackage.License.SetNonCommercialPersonal("Acecook ERP"); } catch { }
+            ExcelPackage.License.SetNonCommercialPersonal("Acecook ERP");
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);

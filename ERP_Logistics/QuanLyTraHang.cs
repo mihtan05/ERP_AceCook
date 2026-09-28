@@ -7,7 +7,7 @@ using ERP.DTO;
 
 namespace ERP
 {
-    public partial class QuanLyTraHang : Form
+    public partial class QuanLyTraHang : Form, IRefreshableForm
     {
         private readonly PhieuTraHangBLL bll = new PhieuTraHangBLL();
 
@@ -16,15 +16,133 @@ namespace ERP
             InitializeComponent();
         }
 
+        private FlowLayoutPanel pnlKpiContainer;
+        private Label lblKpiTotalVal, lblKpiPendingVal, lblKpiDoneVal, lblKpiCanceledVal;
+
+        public void LamMoiDuLieu()
+        {
+            try
+            {
+                LoadDataPhieuTraHang();
+            }
+            catch { }
+        }
+
         private void QuanLyTraHang_Load(object sender, EventArgs e)
         {
-            this.WindowState = FormWindowState.Maximized;
-            dgvData.AutoGenerateColumns = false;
+            // this.WindowState = FormWindowState.Maximized;
+
+            // Áp dụng chuẩn hóa giao diện UI/UX Pro Max
+            UIThemeHelper.ApplyFormStyle(this);
+            UIThemeHelper.ApplySidebar(this.pnlSidebar, this.btnQuanLyTraHang, this);
+            UIThemeHelper.ApplyModernTopHeader(this.pnlTopHeader, "ERP Logistics", "Quản lý trả hàng", this);
+            UIThemeHelper.ApplyActionButton(this.btnAdd, ButtonRole.Primary);
+            UIThemeHelper.ApplyActionButton(this.btnEdit, ButtonRole.Secondary);
+            UIThemeHelper.ApplyActionButton(this.btnDelete, ButtonRole.Danger);
+            UIThemeHelper.ApplyActionButton(this.btnUpdateStatus, ButtonRole.Edit);
+
+            // Thiết lập Filter Bar dạng Card hiện đại chuẩn UI/UX Pro Max (tránh đè chồng, nhãn rõ ràng)
+            UIThemeHelper.SetupModernFilterCard(
+                this.pnlActionTool,
+                this.txtSearch,
+                260,
+                () => {
+                    txtSearch.Text = "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC...";
+                    txtSearch.ForeColor = Color.Gray;
+                    dtpTuNgay.Checked = false;
+                    dtpDenNgay.Checked = false;
+                    if (cmbTrangThai.Items.Count > 0) cmbTrangThai.SelectedIndex = 0;
+                    LamMoiDuLieu();
+                },
+                new FilterItem("Từ ngày:", this.dtpTuNgay, 120),
+                new FilterItem("Đến:", this.dtpDenNgay, 120),
+                new FilterItem("Trạng thái:", this.cmbTrangThai, 180)
+            );
+
+            // Tự động làm mới dữ liệu khi form hiển thị lại từ Hide()
+            this.VisibleChanged += (s, ev) =>
+            {
+                if (this.Visible && !this.IsDisposed)
+                {
+                    LamMoiDuLieu();
+                }
+            };
+
+            InitKpiPanel();
+            KhoiTaoCotBang();
 
             LoadComboBoxData();
             LoadDataPhieuTraHang();
             dtpTuNgay.ValueChanged += (s, ev) => TimKiem();
             dtpDenNgay.ValueChanged += (s, ev) => TimKiem();
+        }
+
+        private void InitKpiPanel()
+        {
+            if (pnlKpiContainer != null) return;
+
+            pnlKpiContainer = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 82,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0, 0, 0, 10),
+                WrapContents = false,
+                AutoScroll = true
+            };
+
+            var card1 = UIThemeHelper.CreateKpiCard("TỔNG PHIẾU TRẢ HÀNG", "0", "Toàn hệ thống", Color.FromArgb(37, 99, 235));
+            lblKpiTotalVal = card1.Controls[1].Controls[0] as Label;
+
+            var card2 = UIThemeHelper.CreateKpiCard("CHỜ XỬ LÝ", "0", "Cần kiểm tra/nhập kho", Color.FromArgb(217, 119, 6));
+            lblKpiPendingVal = card2.Controls[1].Controls[0] as Label;
+
+            var card3 = UIThemeHelper.CreateKpiCard("ĐÃ XỬ LÝ / NHẬP KHO", "0", "Hoàn tất kiểm định", Color.FromArgb(22, 163, 74));
+            lblKpiDoneVal = card3.Controls[1].Controls[0] as Label;
+
+            var card4 = UIThemeHelper.CreateKpiCard("TỪ CHỐI / HỦY", "0", "Không hợp lệ", Color.FromArgb(220, 38, 38));
+            lblKpiCanceledVal = card4.Controls[1].Controls[0] as Label;
+
+            pnlKpiContainer.Controls.Add(card1);
+            pnlKpiContainer.Controls.Add(card2);
+            pnlKpiContainer.Controls.Add(card3);
+            pnlKpiContainer.Controls.Add(card4);
+
+            pnlMainContent.Controls.Add(pnlKpiContainer);
+            pnlKpiContainer.SendToBack();
+            pnlActionTool.BringToFront();
+            dgvData.BringToFront();
+        }
+
+        private void UpdateKpiMetrics(List<PhieuTraHang> list)
+        {
+            try
+            {
+                int total = list != null ? list.Count : 0;
+                int pending = 0;
+                int done = 0;
+                int canceled = 0;
+
+                if (list != null)
+                {
+                    foreach (var p in list)
+                    {
+                        string tt = p.TrangThai ?? "";
+                        if (tt.IndexOf("chờ", StringComparison.OrdinalIgnoreCase) >= 0 || tt.IndexOf("mới", StringComparison.OrdinalIgnoreCase) >= 0)
+                            pending++;
+                        else if (tt.IndexOf("nhập kho", StringComparison.OrdinalIgnoreCase) >= 0 || (tt.IndexOf("xử lý", StringComparison.OrdinalIgnoreCase) >= 0 && tt.IndexOf("chờ", StringComparison.OrdinalIgnoreCase) < 0) || tt.IndexOf("hoàn thành", StringComparison.OrdinalIgnoreCase) >= 0 || tt.IndexOf("duyệt", StringComparison.OrdinalIgnoreCase) >= 0)
+                            done++;
+                        else if (tt.IndexOf("từ chối", StringComparison.OrdinalIgnoreCase) >= 0 || tt.IndexOf("hủy", StringComparison.OrdinalIgnoreCase) >= 0)
+                            canceled++;
+                    }
+                }
+
+                if (lblKpiTotalVal != null) lblKpiTotalVal.Text = total.ToString();
+                if (lblKpiPendingVal != null) lblKpiPendingVal.Text = pending.ToString();
+                if (lblKpiDoneVal != null) lblKpiDoneVal.Text = done.ToString();
+                if (lblKpiCanceledVal != null) lblKpiCanceledVal.Text = canceled.ToString();
+            }
+            catch { }
         }
 
         private void KhoiTaoCotBang()
@@ -95,6 +213,9 @@ namespace ERP
 
             dgvData.AllowUserToResizeColumns = true;
             dgvData.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            // Áp dụng định dạng bảng dữ liệu Data-Dense theo chuẩn UI/UX Pro Max
+            UIThemeHelper.ApplyModernGridStyle(dgvData);
         }
 
         private void LoadComboBoxData()
@@ -102,7 +223,7 @@ namespace ERP
             try
             {
                 // Đổ data vào ComboBox bộ lọc trạng thái
-                string[] dsTrangThai = { "Chờ xử lý", "Đang thu hồi", "Đã nhập kho", "Đã hủy" };
+                string[] dsTrangThai = { "Chờ xử lý", "Đang thu hồi", "Đã xử lý", "Đã hủy" };
                 cmbTrangThai.Items.Clear();
                 cmbTrangThai.Items.Add("Tất cả trạng thái");
                 cmbTrangThai.Items.AddRange(dsTrangThai);
@@ -132,6 +253,9 @@ namespace ERP
             dgvData.DataSource = null;
             dgvData.DataSource = list;
 
+            // Cập nhật số liệu hiển thị trên thẻ KPI
+            UpdateKpiMetrics(list);
+
             // Định dạng màu sắc trạng thái
             foreach (DataGridViewRow row in dgvData.Rows)
             {
@@ -146,11 +270,11 @@ namespace ERP
                     {
                         row.Cells["colTrangThai"].Style.ForeColor = Color.FromArgb(13, 110, 253); // Xanh dương
                     }
-                    else if (tt == "Đã nhập kho")
+                    else if (tt == "Đã xử lý" || tt == "Đã nhập kho")
                     {
                         row.Cells["colTrangThai"].Style.ForeColor = Color.FromArgb(40, 167, 69); // Xanh lá
                     }
-                    else if (tt == "Đã hủy")
+                    else if (tt == "Đã hủy" || tt == "Từ chối")
                     {
                         row.Cells["colTrangThai"].Style.ForeColor = Color.FromArgb(220, 53, 69); // Đỏ
                     }
@@ -166,7 +290,7 @@ namespace ERP
             try
             {
                 string keyword = txtSearch.Text.Trim();
-                if (keyword == "🔍 Tìm kiếm theo Mã phiếu trả, Tên ĐVC..." || keyword == "🔍 Tìm kiếm theo Mã phiếu trả, Mã YC, Khách hàng...")
+                if (keyword == "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC..." || keyword == "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC...")
                 {
                     keyword = "";
                 }
@@ -195,8 +319,8 @@ namespace ERP
 
         private void txtSearch_TextChanged(object sender, EventArgs e)
         {
-            if (txtSearch.Text != "🔍 Tìm kiếm theo Mã phiếu trả, Tên ĐVC..." &&
-                txtSearch.Text != "🔍 Tìm kiếm theo Mã phiếu trả, Mã YC, Khách hàng...")
+            if (txtSearch.Text != "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC..." &&
+                txtSearch.Text != "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC...")
             {
                 TimKiem();
             }
@@ -209,8 +333,8 @@ namespace ERP
 
         private void txtSearch_Enter(object sender, EventArgs e)
         {
-            if (txtSearch.Text == "🔍 Tìm kiếm theo Mã phiếu trả, Tên ĐVC..." ||
-                txtSearch.Text == "🔍 Tìm kiếm theo Mã phiếu trả, Mã YC, Khách hàng...")
+            if (txtSearch.Text == "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC..." ||
+                txtSearch.Text == "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC...")
             {
                 txtSearch.Text = "";
                 txtSearch.ForeColor = Color.Black;
@@ -221,7 +345,7 @@ namespace ERP
         {
             if (string.IsNullOrWhiteSpace(txtSearch.Text))
             {
-                txtSearch.Text = "🔍 Tìm kiếm theo Mã phiếu trả, Tên ĐVC...";
+                txtSearch.Text = "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC...";
                 txtSearch.ForeColor = Color.Gray;
             }
         }
@@ -244,6 +368,13 @@ namespace ERP
             if (dgvData.CurrentRow != null)
             {
                 string id = dgvData.CurrentRow.Cells["colID_PhieuTra"].Value?.ToString();
+                string status = dgvData.CurrentRow.Cells["colTrangThai"].Value?.ToString();
+
+                if (status == "Đã xử lý" || status == "Đã nhập kho" || status == "Đã hủy" || status == "Từ chối")
+                {
+                    MessageBox.Show($"Phiếu trả hàng [{id}] đã '{status}' (Kho đã duyệt / kết thúc) nên thông tin đã bị khóa!\n\nHệ thống sẽ mở phiếu ở chế độ chỉ đọc để xem chi tiết.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
                 if (!string.IsNullOrEmpty(id))
                 {
                     FrmPhieuTraHang frm = new FrmPhieuTraHang(id);
@@ -256,6 +387,42 @@ namespace ERP
             else
             {
                 MessageBox.Show("Vui lòng chọn phiếu trả hàng cần sửa trên bảng!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void btnUpdateStatus_Click(object sender, EventArgs e)
+        {
+            if (dgvData.CurrentRow != null)
+            {
+                string id = dgvData.CurrentRow.Cells["colID_PhieuTra"].Value?.ToString();
+                string statusHienTai = dgvData.CurrentRow.Cells["colTrangThai"].Value?.ToString();
+
+                if (statusHienTai == "Đã xử lý" || statusHienTai == "Đã nhập kho")
+                {
+                    MessageBox.Show("Phiếu trả hàng này đã HOÀN THÀNH / ĐƯỢC KHO DUYỆT XỬ LÝ nên không thể thay đổi trạng thái!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (statusHienTai == "Đã hủy" || statusHienTai == "Từ chối")
+                {
+                    MessageBox.Show("Phiếu trả hàng này ĐÃ HỦY / TỪ CHỐI nên không thể thay đổi trạng thái!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (!string.IsNullOrEmpty(id))
+                {
+                    using (FrmCapNhatTrangThaiTraHang frm = new FrmCapNhatTrangThaiTraHang(id, statusHienTai))
+                    {
+                        if (frm.ShowDialog() == DialogResult.OK)
+                        {
+                            LoadDataPhieuTraHang();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("Vui lòng chọn phiếu trả hàng cần cập nhật trạng thái!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -299,34 +466,27 @@ namespace ERP
         // ==========================================
         private void btnQuanLyXe_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyXe frmXe = new QuanLyXe();
-            frmXe.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyXe>(this);
         }
 
         private void btnQuanLyNhaCungCap_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyNhaCungCap frmNCC = new QuanLyNhaCungCap();
-            frmNCC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyNhaCungCap>(this);
         }
 
         private void btnQuanLyDiemVanChuyen_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyDiemVanChuyen frmDVC = new QuanLyDiemVanChuyen();
-            frmDVC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyDiemVanChuyen>(this);
         }
 
         private void btnQuanLyDonVanChuyen_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyDonVanChuyen frmDonVC = new QuanLyDonVanChuyen();
-            frmDonVC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyDonVanChuyen>(this);
+        }
+
+        private void btnDangNhap_Click(object sender, EventArgs e)
+        {
+            LogisticsHelper.DangXuat(this);
         }
     }
 }

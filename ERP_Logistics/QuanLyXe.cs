@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Data;
 using Npgsql;
 using System.Drawing;
@@ -7,25 +7,143 @@ using ERP.DAL;
 
 namespace ERP
 {
-    public partial class QuanLyXe : Form
+    public partial class QuanLyXe : Form, IRefreshableForm
     {
         private string connectionString = DatabaseConfig.GetConnectionString();
         private DataTable dtXe;
+        private readonly ERP.BLL.DonVanChuyenBLL donVanChuyenBLL = new ERP.BLL.DonVanChuyenBLL();
 
         public QuanLyXe()
         {
             InitializeComponent();
         }
 
+        private FlowLayoutPanel pnlKpiContainer;
+        private Label lblKpiTotalVal, lblKpiFreeVal, lblKpiBusyVal, lblKpiMaintVal;
+
+        public void LamMoiDuLieu()
+        {
+            try
+            {
+                LoadDataXe();
+                LoadTrangThaiFilter();
+            }
+            catch { }
+        }
+
         private void QuanLyXe_Load(object sender, EventArgs e)
         {
-            this.WindowState = FormWindowState.Maximized;
+            // Không cần set WindowState ở đây - đầu mục sẽ được đặt ngay khi mở form
+            // this.WindowState = FormWindowState.Maximized;
 
-            if (cboVehicleType.Items.Count > 0) cboVehicleType.SelectedIndex = 0;
+            // Áp dụng chuẩn hóa giao diện UI/UX Pro Max
+            UIThemeHelper.ApplyFormStyle(this);
+            UIThemeHelper.ApplySidebar(this.pnlSidebar, this.btnQuanLyXe, this);
+            UIThemeHelper.ApplyModernTopHeader(this.pnlTopHeader, "ERP Logistics", "Quản lý xe", this);
+            UIThemeHelper.ApplyActionButton(this.btnAdd, ButtonRole.Primary);
+            UIThemeHelper.ApplyActionButton(this.btnEdit, ButtonRole.Secondary);
+            UIThemeHelper.ApplyActionButton(this.btnDelete, ButtonRole.Danger);
+
+            // Thiết lập Filter Bar dạng Card hiện đại chuẩn UI/UX Pro Max
+            UIThemeHelper.SetupModernFilterCard(
+                this.pnlActionTool,
+                this.txtSearch,
+                280,
+                () => {
+                    txtSearch.Text = "🔍 Tìm kiếm phương tiện, tài xế...";
+                    txtSearch.ForeColor = Color.Gray;
+                    if (cboStatus.Items.Count > 0) cboStatus.SelectedIndex = 0;
+                    LamMoiDuLieu();
+                },
+                new FilterItem("Trạng thái:", this.cboStatus, 160)
+            );
+
+            // Đăng ký sự kiện khi form được hiển thị trở lại từ Hide()
+            this.VisibleChanged += (s, ev) =>
+            {
+                if (this.Visible && !this.IsDisposed)
+                {
+                    LamMoiDuLieu();
+                }
+            };
+
+            // Đổ dữ liệu lên các filter từ database
+            LoadTrangThaiFilter();
+
+            InitKpiPanel();
+
             if (cboStatus.Items.Count > 0) cboStatus.SelectedIndex = 0;
 
             KhoiTaoCotBang();
             LoadDataXe();
+        }
+
+        private void InitKpiPanel()
+        {
+            if (pnlKpiContainer != null) return;
+
+            pnlKpiContainer = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 82,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0, 0, 0, 10),
+                WrapContents = false,
+                AutoScroll = true
+            };
+
+            var card1 = UIThemeHelper.CreateKpiCard("TỔNG PHƯƠNG TIỆN", "0", "Đội xe vận tải", Color.FromArgb(37, 99, 235));
+            lblKpiTotalVal = card1.Controls[1].Controls[0] as Label;
+
+            var card2 = UIThemeHelper.CreateKpiCard("XE ĐANG RẢNH", "0", "Sẵn sàng điều phối", Color.FromArgb(22, 163, 74));
+            lblKpiFreeVal = card2.Controls[1].Controls[0] as Label;
+
+            var card3 = UIThemeHelper.CreateKpiCard("ĐANG VẬN CHUYỂN", "0", "Đang trên lộ trình", Color.FromArgb(14, 165, 233));
+            lblKpiBusyVal = card3.Controls[1].Controls[0] as Label;
+
+            var card4 = UIThemeHelper.CreateKpiCard("ĐANG BẢO TRÌ", "0", "Bảo dưỡng định kỳ", Color.FromArgb(217, 119, 6));
+            lblKpiMaintVal = card4.Controls[1].Controls[0] as Label;
+
+            pnlKpiContainer.Controls.Add(card1);
+            pnlKpiContainer.Controls.Add(card2);
+            pnlKpiContainer.Controls.Add(card3);
+            pnlKpiContainer.Controls.Add(card4);
+
+            pnlMainContent.Controls.Add(pnlKpiContainer);
+            pnlKpiContainer.SendToBack();
+            pnlActionTool.BringToFront();
+            dgvData.BringToFront();
+        }
+
+        private void UpdateKpiMetrics()
+        {
+            try
+            {
+                int total = dtXe != null ? dtXe.Rows.Count : 0;
+                int free = 0;
+                int busy = 0;
+                int maint = 0;
+
+                if (dtXe != null)
+                {
+                    foreach (DataRow row in dtXe.Rows)
+                    {
+                        string tt = row["TrangThaiXe"]?.ToString() ?? "";
+                        if (tt.IndexOf("rảnh", StringComparison.OrdinalIgnoreCase) >= 0 || tt.IndexOf("sẵn sàng", StringComparison.OrdinalIgnoreCase) >= 0)
+                            free++;
+                        else if (tt.IndexOf("vận chuyển", StringComparison.OrdinalIgnoreCase) >= 0 || tt.IndexOf("đang giao", StringComparison.OrdinalIgnoreCase) >= 0)
+                            busy++;
+                        else if (tt.IndexOf("bảo trì", StringComparison.OrdinalIgnoreCase) >= 0 || tt.IndexOf("sửa", StringComparison.OrdinalIgnoreCase) >= 0)
+                            maint++;
+                    }
+                }
+
+                if (lblKpiTotalVal != null) lblKpiTotalVal.Text = total.ToString();
+                if (lblKpiFreeVal != null) lblKpiFreeVal.Text = free.ToString();
+                if (lblKpiBusyVal != null) lblKpiBusyVal.Text = busy.ToString();
+                if (lblKpiMaintVal != null) lblKpiMaintVal.Text = maint.ToString();
+            }
+            catch { }
         }
 
         private void KhoiTaoCotBang()
@@ -97,10 +215,54 @@ namespace ERP
 
             dgvData.AllowUserToResizeColumns = true;
             dgvData.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            // Áp dụng chuẩn bảng biểu UI/UX Pro Max
+            UIThemeHelper.ApplyModernGridStyle(dgvData);
+        }
+
+        // Đổ dữ liệu trạng thái xe lên filter combobox từ database
+        private void LoadTrangThaiFilter()
+        {
+            string query = "SELECT DISTINCT TrangThaiXe FROM PhuongTien WHERE TrangThaiXe IS NOT NULL ORDER BY TrangThaiXe ASC";
+
+            cboStatus.Items.Clear();
+            cboStatus.Items.Add("Tất cả trạng thái"); // Item mặc định
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    NpgsqlCommand cmd = new NpgsqlCommand(query, conn);
+
+                    using (NpgsqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string trangThai = reader["TrangThaiXe"].ToString();
+                            cboStatus.Items.Add(trangThai);
+                        }
+                    }
+
+                    if (cboStatus.Items.Count > 0)
+                        cboStatus.SelectedIndex = 0; // Chọn "Tất cả" mặc định
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Lỗi khi tải danh sách trạng thái: " + ex.Message, "Lỗi SQL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
         private void LoadDataXe()
         {
+            // Tự động đồng bộ trạng thái toàn bộ phương tiện theo thực tế hoạt động
+            try
+            {
+                donVanChuyenBLL.DongBoTrangThaiXeToanHeThong();
+            }
+            catch { }
+
             // Truy vấn lấy dữ liệu chính xác từ bảng PhuongTien
             string query = "SELECT BienSoXe, LoaiXe, TaiTrong, TenTaiXe, TrangThaiXe, KichHoat FROM PhuongTien ORDER BY BienSoXe ASC";
 
@@ -114,6 +276,7 @@ namespace ERP
                     da.Fill(dtXe);
 
                     dgvData.DataSource = dtXe;
+                    UpdateKpiMetrics();
                 }
                 catch (Exception ex)
                 {
@@ -127,11 +290,6 @@ namespace ERP
         // ==========================================
 
         private void txtSearch_TextChanged(object sender, EventArgs e)
-        {
-            LocDuLieu();
-        }
-
-        private void cboVehicleType_SelectedIndexChanged(object sender, EventArgs e)
         {
             LocDuLieu();
         }
@@ -154,13 +312,6 @@ namespace ERP
             if (!string.IsNullOrEmpty(keyword))
             {
                 filter += $" AND (BienSoXe LIKE '%{keyword}%' OR LoaiXe LIKE '%{keyword}%' OR TenTaiXe LIKE '%{keyword}%')";
-            }
-
-            // Lọc theo loại xe nếu ComboBox chọn loại xe cụ thể
-            if (cboVehicleType.SelectedIndex > 0)
-            {
-                string selectedType = cboVehicleType.SelectedItem.ToString();
-                filter += $" AND LoaiXe = '{selectedType}'";
             }
 
             // Lọc theo trạng thái xe
@@ -303,34 +454,27 @@ namespace ERP
 
         private void btnQuanLyNhaCungCap_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyNhaCungCap frmNCC = new QuanLyNhaCungCap();
-            frmNCC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyNhaCungCap>(this);
         }
 
         private void btnQuanLyDiemVanChuyen_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyDiemVanChuyen frmDVC = new QuanLyDiemVanChuyen();
-            frmDVC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyDiemVanChuyen>(this);
         }
 
         private void btnQuanLyTraHang_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyTraHang frmTraHang = new QuanLyTraHang();
-            frmTraHang.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyTraHang>(this);
         }
 
         private void btnQuanLyDonVanChuyen_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyDonVanChuyen frmDonVC = new QuanLyDonVanChuyen();
-            frmDonVC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyDonVanChuyen>(this);
+        }
+
+        private void btnDangNhap_Click(object sender, EventArgs e)
+        {
+            LogisticsHelper.DangXuat(this);
         }
     }
 }

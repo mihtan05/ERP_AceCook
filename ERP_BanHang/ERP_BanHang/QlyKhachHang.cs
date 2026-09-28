@@ -9,7 +9,9 @@ namespace ERP_BanHang
 {
     public partial class QlyKhachHang : Form
     {
-        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"].ConnectionString;
+        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"]?.ConnectionString
+            ?? ConfigurationManager.ConnectionStrings["ERP_BanHang"]?.ConnectionString;
+
         private DataTable dtKhachHang;
 
         // Biến xử lý tính năng Nhấn giữ chuột lâu để Xóa (Long-press)
@@ -17,10 +19,14 @@ namespace ERP_BanHang
         private int selectedRowIndexForDelete = -1;
         private const int LONG_PRESS_DURATION = 1000; // Thời gian giữ chuột: 1000ms (1 giây)
 
+        // Khai báo Timer cho tính năng Auto Load dữ liệu ngầm
+        private Timer autoLoadTimer;
+
         public QlyKhachHang()
         {
             InitializeComponent();
             KhoiTaoLongPressTimer();
+            KhoiTaoAutoLoadTimer(); // Khởi tạo bộ đếm thời gian
         }
 
         private void KhoiTaoLongPressTimer()
@@ -28,6 +34,22 @@ namespace ERP_BanHang
             longPressTimer = new Timer();
             longPressTimer.Interval = LONG_PRESS_DURATION;
             longPressTimer.Tick += LongPressTimer_Tick;
+        }
+
+        // ==========================================
+        // CẤU HÌNH AUTO LOAD TIMER (5 GIÂY / LẦN)
+        // ==========================================
+        private void KhoiTaoAutoLoadTimer()
+        {
+            autoLoadTimer = new Timer();
+            autoLoadTimer.Interval = 5000; // Tải lại dữ liệu mỗi 5000ms (5 giây)
+            autoLoadTimer.Tick += AutoLoadTimer_Tick;
+        }
+
+        private void AutoLoadTimer_Tick(object sender, EventArgs e)
+        {
+            // Gọi hàm cập nhật dữ liệu tự động từ PostgreSQL
+            LoadDataKhachHang();
         }
 
         private void QlyKhachHang_Load(object sender, EventArgs e)
@@ -41,6 +63,41 @@ namespace ERP_BanHang
             BangKhachHang.MouseDown += BangKhachHang_MouseDown;
             BangKhachHang.MouseUp += BangKhachHang_MouseUp;
             BangKhachHang.CellDoubleClick += BangKhachHang_CellDoubleClick;
+
+            // Đăng ký sự kiện vòng đời Form để quản lý Timer tiết kiệm tài nguyên
+            this.Activated += QlyKhachHang_Activated;
+            this.Deactivate += QlyKhachHang_Deactivate;
+            this.FormClosing += QlyKhachHang_FormClosing;
+
+            // Bắt đầu Auto Load
+            autoLoadTimer.Start();
+        }
+
+        // Tự động Bật/Tắt Timer khi người dùng chuyển Tab/Ứng dụng khác
+        private void QlyKhachHang_Activated(object sender, EventArgs e)
+        {
+            LoadDataKhachHang();
+            if (autoLoadTimer != null && !autoLoadTimer.Enabled)
+            {
+                autoLoadTimer.Start();
+            }
+        }
+
+        private void QlyKhachHang_Deactivate(object sender, EventArgs e)
+        {
+            if (autoLoadTimer != null)
+            {
+                autoLoadTimer.Stop();
+            }
+        }
+
+        private void QlyKhachHang_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (autoLoadTimer != null)
+            {
+                autoLoadTimer.Stop();
+                autoLoadTimer.Dispose();
+            }
         }
 
         private void KhoiTaoCotBang()
@@ -108,8 +165,18 @@ namespace ERP_BanHang
             BangKhachHang.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
 
+        // ==========================================
+        // TẢI DỮ LIỆU TỪ CSDL (GIỮ VỊ TRÍ CHỌN)
+        // ==========================================
         private void LoadDataKhachHang()
         {
+            // Lưu lại vị trí dòng người dùng đang chọn để không bị nhảy con trỏ chuột khi tự động refresh
+            int currentRowIndex = -1;
+            if (BangKhachHang.CurrentRow != null)
+            {
+                currentRowIndex = BangKhachHang.CurrentRow.Index;
+            }
+
             string query = @"
                 SELECT 
                     ID_KH,
@@ -127,14 +194,21 @@ namespace ERP_BanHang
                 {
                     conn.Open();
                     NpgsqlDataAdapter da = new NpgsqlDataAdapter(query, conn);
-                    dtKhachHang = new DataTable();
-                    da.Fill(dtKhachHang);
+                    DataTable dtTemp = new DataTable();
+                    da.Fill(dtTemp);
 
-                    BangKhachHang.DataSource = dtKhachHang;
+                    dtKhachHang = dtTemp;
+                    LocDuLieu();
+
+                    // Khôi phục vị trí dòng được chọn trước khi làm mới
+                    if (currentRowIndex >= 0 && currentRowIndex < BangKhachHang.Rows.Count)
+                    {
+                        BangKhachHang.Rows[currentRowIndex].Selected = true;
+                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    MessageBox.Show("Lỗi kết nối CSDL: " + ex.Message, "Lỗi PostgreSQL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    // Giữ im lặng khi bị ngắt kết nối mạng thoáng qua trong quá trình timer chạy ngầm
                 }
             }
         }
@@ -190,7 +264,7 @@ namespace ERP_BanHang
         }
 
         // ==========================================
-        // THAO TÁC LONG-PRESS DỂ XÓA
+        // THAO TÁC LONG-PRESS ĐỂ XÓA
         // ==========================================
 
         private void BangKhachHang_MouseDown(object sender, MouseEventArgs e)
@@ -439,29 +513,23 @@ namespace ERP_BanHang
             {
                 try
                 {
-                    // 1. Xóa file phiên làm việc tạm (nếu có)
                     string tempPath = System.IO.Path.Combine(Application.StartupPath, "session.txt");
                     if (System.IO.File.Exists(tempPath))
                     {
                         System.IO.File.Delete(tempPath);
                     }
 
-                    // 2. Thuật toán tìm file ERP_Khach.exe linh hoạt trên mọi máy
                     string baseDir = Application.StartupPath;
                     string targetExe = "ERP_Khach.exe";
                     string pathExeDangNhap = "";
 
-                    // Kiểm tra các vị trí file exe có thể nằm
                     string[] possiblePaths = new string[]
                     {
-                // Khi chạy Release / Đóng gói chung thư mục
-                System.IO.Path.Combine(baseDir, targetExe),
-                System.IO.Path.Combine(baseDir, "..", targetExe),
-                System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
-                
-                // Khi chạy Debug trong Visual Studio
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
+                        System.IO.Path.Combine(baseDir, targetExe),
+                        System.IO.Path.Combine(baseDir, "..", targetExe),
+                        System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
                     };
 
                     foreach (string p in possiblePaths)
@@ -473,11 +541,10 @@ namespace ERP_BanHang
                         }
                     }
 
-                    // 3. Khởi chạy ứng dụng đăng nhập và đóng ứng dụng hiện tại
                     if (!string.IsNullOrEmpty(pathExeDangNhap))
                     {
                         System.Diagnostics.Process.Start(pathExeDangNhap);
-                        Application.Exit(); // Đóng hoàn toàn ERP_BanHang
+                        Application.Exit();
                     }
                     else
                     {

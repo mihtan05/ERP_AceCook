@@ -1,4 +1,4 @@
-namespace ERP
+﻿namespace ERP
 {
     partial class QuanLyTraHang
     {
@@ -45,6 +45,7 @@ namespace ERP
             this.btnDelete = new System.Windows.Forms.Button();
             this.btnEdit = new System.Windows.Forms.Button();
             this.btnAdd = new System.Windows.Forms.Button();
+            this.btnUpdateStatus = new System.Windows.Forms.Button();
             this.dtpTuNgay = new System.Windows.Forms.DateTimePicker();
             this.dtpDenNgay = new System.Windows.Forms.DateTimePicker();
             this.cmbTrangThai = new System.Windows.Forms.ComboBox();
@@ -90,6 +91,7 @@ namespace ERP
             this.btnDangNhap.TabIndex = 8;
             this.btnDangNhap.Text = "Đăng xuất";
             this.btnDangNhap.UseVisualStyleBackColor = true;
+            this.btnDangNhap.Click += new System.EventHandler(this.btnDangNhap_Click);
             // 
             // pnlUserBottom
             // 
@@ -353,6 +355,7 @@ namespace ERP
             this.pnlActionTool.Controls.Add(this.btnDelete);
             this.pnlActionTool.Controls.Add(this.btnEdit);
             this.pnlActionTool.Controls.Add(this.btnAdd);
+            this.pnlActionTool.Controls.Add(this.btnUpdateStatus);
             this.pnlActionTool.Controls.Add(this.dtpDenNgay);
             this.pnlActionTool.Controls.Add(this.dtpTuNgay);
             this.pnlActionTool.Controls.Add(this.cmbTrangThai);
@@ -363,6 +366,22 @@ namespace ERP
             this.pnlActionTool.Name = "pnlActionTool";
             this.pnlActionTool.Size = new System.Drawing.Size(1020, 120);
             this.pnlActionTool.TabIndex = 0;
+            // 
+            // btnUpdateStatus
+            // 
+            this.btnUpdateStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnUpdateStatus.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(123)))), ((int)(((byte)(255)))));
+            this.btnUpdateStatus.FlatAppearance.BorderSize = 0;
+            this.btnUpdateStatus.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnUpdateStatus.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnUpdateStatus.ForeColor = System.Drawing.Color.White;
+            this.btnUpdateStatus.Location = new System.Drawing.Point(530, 10);
+            this.btnUpdateStatus.Name = "btnUpdateStatus";
+            this.btnUpdateStatus.Size = new System.Drawing.Size(140, 35);
+            this.btnUpdateStatus.TabIndex = 8;
+            this.btnUpdateStatus.Text = "🔄 Cập nhật HĐ";
+            this.btnUpdateStatus.UseVisualStyleBackColor = false;
+            this.btnUpdateStatus.Click += new System.EventHandler(this.btnUpdateStatus_Click);
             // 
             // btnDelete
             // 
@@ -452,15 +471,14 @@ namespace ERP
             // 
             // txtSearch
             // 
-            this.txtSearch.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
+            this.txtSearch.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)));
             this.txtSearch.Font = new System.Drawing.Font("Segoe UI", 9.5F);
             this.txtSearch.ForeColor = System.Drawing.Color.Gray;
             this.txtSearch.Location = new System.Drawing.Point(0, 75);
             this.txtSearch.Name = "txtSearch";
-            this.txtSearch.Size = new System.Drawing.Size(330, 29);
+            this.txtSearch.Size = new System.Drawing.Size(340, 29);
             this.txtSearch.TabIndex = 3;
-            this.txtSearch.Text = "🔍 Tìm kiếm theo Mã phiếu trả, Mã YC, Khách hàng...";
+            this.txtSearch.Text = "🔍 Tìm kiếm theo Mã phiếu, Biển số xe, Mã CTYC, Tên ĐVC...";
             this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
             this.txtSearch.Enter += new System.EventHandler(this.txtSearch_Enter);
             this.txtSearch.Leave += new System.EventHandler(this.txtSearch_Leave);
@@ -486,6 +504,7 @@ namespace ERP
             this.Controls.Add(this.pnlSidebar);
             this.Name = "QuanLyTraHang";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.Text = "Hệ thống ERP - Phân Hệ Vận Chuyển - Quản Lý Trả Hàng";
             this.Load += new System.EventHandler(this.QuanLyTraHang_Load);
             this.pnlSidebar.ResumeLayout(false);
@@ -526,6 +545,7 @@ namespace ERP
         private System.Windows.Forms.Button btnAdd;
         private System.Windows.Forms.Button btnEdit;
         private System.Windows.Forms.Button btnDelete;
+        private System.Windows.Forms.Button btnUpdateStatus;
         private System.Windows.Forms.DateTimePicker dtpTuNgay;
         private System.Windows.Forms.DateTimePicker dtpDenNgay;
         private System.Windows.Forms.DataGridView dgvData;

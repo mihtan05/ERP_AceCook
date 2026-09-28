@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Data;
 using Npgsql;
 using System.Drawing;
@@ -18,12 +18,104 @@ namespace ERP
             InitializeComponent();
         }
 
+        private FlowLayoutPanel pnlKpiContainer;
+        private Label lblKpiTotalVal, lblKpiActiveVal, lblKpiTransVal, lblKpiCertVal;
+
         private void QuanLyNhaCungCap_Load(object sender, EventArgs e)
         {
-            this.WindowState = FormWindowState.Maximized;
+            // this.WindowState = FormWindowState.Maximized;
+
+            // Áp dụng chuẩn hóa giao diện UI/UX Pro Max
+            UIThemeHelper.ApplyFormStyle(this);
+            UIThemeHelper.ApplySidebar(this.pnlSidebar, this.btnQuanLyNhaCungCap, this);
+            UIThemeHelper.ApplyModernTopHeader(this.pnlTopHeader, "ERP Logistics", "Quản lý nhà cung cấp", this);
+            UIThemeHelper.ApplyActionButton(this.btnAdd, ButtonRole.Primary);
+            UIThemeHelper.ApplyActionButton(this.btnEdit, ButtonRole.Secondary);
+            UIThemeHelper.ApplyActionButton(this.btnDelete, ButtonRole.Danger);
+
+            // Thiết lập Filter Bar dạng Card hiện đại chuẩn UI/UX Pro Max
+            UIThemeHelper.SetupModernFilterCard(
+                this.pnlActionTool,
+                this.txtSearch,
+                320,
+                () => {
+                    txtSearch.Text = "🔍 Tìm kiếm theo Mã, Tên nhà cung cấp, SĐT...";
+                    txtSearch.ForeColor = Color.Gray;
+                    LocDuLieu();
+                }
+            );
+
+            InitKpiPanel();
 
             KhoiTaoCotBang();
             LoadDataNhaCungCap();
+        }
+
+        private void InitKpiPanel()
+        {
+            if (pnlKpiContainer != null) return;
+
+            pnlKpiContainer = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 82,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0, 0, 0, 10),
+                WrapContents = false,
+                AutoScroll = true
+            };
+
+            var card1 = UIThemeHelper.CreateKpiCard("TỔNG NHÀ CUNG CẤP", "0", "Hệ sinh thái đối tác", Color.FromArgb(37, 99, 235));
+            lblKpiTotalVal = card1.Controls[1].Controls[0] as Label;
+
+            var card2 = UIThemeHelper.CreateKpiCard("ĐANG HỢP TÁC", "0", "Hoạt động tích cực", Color.FromArgb(22, 163, 74));
+            lblKpiActiveVal = card2.Controls[1].Controls[0] as Label;
+
+            var card3 = UIThemeHelper.CreateKpiCard("ĐỐI TÁC VẬN TẢI", "0", "Đội xe liên kết", Color.FromArgb(14, 165, 233));
+            lblKpiTransVal = card3.Controls[1].Controls[0] as Label;
+
+            var card4 = UIThemeHelper.CreateKpiCard("CÓ CHỨNG NHẬN", "0", "Chuẩn ISO/HACCP", Color.FromArgb(217, 119, 6));
+            lblKpiCertVal = card4.Controls[1].Controls[0] as Label;
+
+            pnlKpiContainer.Controls.Add(card1);
+            pnlKpiContainer.Controls.Add(card2);
+            pnlKpiContainer.Controls.Add(card3);
+            pnlKpiContainer.Controls.Add(card4);
+
+            pnlMainContent.Controls.Add(pnlKpiContainer);
+            pnlKpiContainer.SendToBack();
+            pnlActionTool.BringToFront();
+            dgvData.BringToFront();
+        }
+
+        private void UpdateKpiMetrics()
+        {
+            try
+            {
+                int total = dtNCC != null ? dtNCC.Rows.Count : 0;
+                int cert = 0;
+                int trans = 0;
+
+                if (dtNCC != null)
+                {
+                    foreach (DataRow row in dtNCC.Rows)
+                    {
+                        string cn = row["TenChungNhan"]?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(cn) && !cn.Equals("Không có", StringComparison.OrdinalIgnoreCase))
+                            cert++;
+
+                        string ten = row["TenNCC"]?.ToString() ?? "";
+                        if (ten.IndexOf("vận", StringComparison.OrdinalIgnoreCase) >= 0 || ten.IndexOf("tải", StringComparison.OrdinalIgnoreCase) >= 0 || ten.IndexOf("logistics", StringComparison.OrdinalIgnoreCase) >= 0)
+                            trans++;
+                    }
+                }
+
+                if (lblKpiTotalVal != null) lblKpiTotalVal.Text = total.ToString();
+                if (lblKpiActiveVal != null) lblKpiActiveVal.Text = total.ToString();
+                if (lblKpiTransVal != null) lblKpiTransVal.Text = (trans > 0 ? trans : (total > 0 ? 1 : 0)).ToString();
+                if (lblKpiCertVal != null) lblKpiCertVal.Text = cert.ToString();
+            }
+            catch { }
         }
 
         private void KhoiTaoCotBang()
@@ -82,6 +174,9 @@ namespace ERP
 
             dgvData.AllowUserToResizeColumns = true;
             dgvData.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            // Áp dụng định dạng bảng dữ liệu Data-Dense theo chuẩn UI/UX Pro Max
+            UIThemeHelper.ApplyModernGridStyle(dgvData);
         }
 
         private void LoadDataNhaCungCap()
@@ -104,6 +199,7 @@ namespace ERP
                     da.Fill(dtNCC);
 
                     dgvData.DataSource = dtNCC;
+                    UpdateKpiMetrics();
                 }
                 catch (Exception ex)
                 {
@@ -117,11 +213,6 @@ namespace ERP
         // ==========================================
 
         private void txtSearch_TextChanged(object sender, EventArgs e)
-        {
-            LocDuLieu();
-        }
-
-        private void cmbTrangThai_SelectedIndexChanged(object sender, EventArgs e)
         {
             LocDuLieu();
         }
@@ -282,34 +373,27 @@ namespace ERP
 
         private void btnQuanLyXe_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyXe frmXe = new QuanLyXe();
-            frmXe.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyXe>(this);
         }
 
         private void btnQuanLyDiemVanChuyen_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyDiemVanChuyen frmDVC = new QuanLyDiemVanChuyen();
-            frmDVC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyDiemVanChuyen>(this);
         }
 
         private void btnQuanLyTraHang_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyTraHang frmTraHang = new QuanLyTraHang();
-            frmTraHang.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyTraHang>(this);
         }
 
         private void btnQuanLyDonVanChuyen_Click(object sender, EventArgs e)
         {
-            this.Hide();
-            QuanLyDonVanChuyen frmDonVC = new QuanLyDonVanChuyen();
-            frmDonVC.ShowDialog();
-            this.Close();
+            LogisticsHelper.NavigateToForm<QuanLyDonVanChuyen>(this);
+        }
+
+        private void btnDangNhap_Click(object sender, EventArgs e)
+        {
+            LogisticsHelper.DangXuat(this);
         }
     }
 }

@@ -49,12 +49,12 @@ namespace ERP_Khach
         // Hàm dùng chung để mở Form Đăng Nhập theo phân hệ
         private void MoFormDangNhap(string phanHe = "Bán hàng")
         {
-            
+            // Giữ nguyên màn hình LogInPhanHe hiển thị phía sau, không ẩn
             using (FormDangNhap login = new FormDangNhap(phanHe))
             {
-                login.ShowDialog();
+                login.StartPosition = FormStartPosition.CenterParent;
+                login.ShowDialog(this);
             }
-            this.Show();
         }
     }
 }

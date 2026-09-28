@@ -1,4 +1,4 @@
-<Project>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <!-- Tu dong khoi phuc NuGet packages truoc khi bien dich neu thu vien chua co tren may -->
   <Target Name="AutoRestorePackages" BeforeTargets="PrepareForBuild" Condition="!Exists('$(MSBuildThisFileDirectory)ERP_BanHang\packages\Npgsql.4.1.12')">
     <Message Importance="high" Text="[ERP Auto-Restore] Dang tu dong khoi phuc thu vien NuGet cho lan chay dau tien..." />

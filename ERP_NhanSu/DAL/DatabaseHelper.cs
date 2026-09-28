@@ -22,7 +22,31 @@ namespace HR_Management.DAL
 
         // Chuỗi kết nối Neon Cloud PostgreSQL
         public static string CloudConnectionString { get; set; } = 
-            "Host=ep-bitter-heart-b3yu3xlc-pooler.c-4.ap-southeast-1.aws.neon.tech;Port=5432;Database=erp_banhang;Username=neondb_owner;Password=npg_fVzi2bH5uYaj;SSL Mode=Require;Trust Server Certificate=true;";
+            "Host=ep-bitter-heart-b3yu3xlc-pooler.c-4.ap-southeast-1.aws.neon.tech;Port=5432;Database=erp_banhang;Username=neondb_owner;Password=npg_fVzi2bH5uYaj;SSL Mode=Require;Trust Server Certificate=true;Timeout=30;Command Timeout=30;KeepAlive=30;";
+
+        static DatabaseHelper()
+        {
+            try
+            {
+                System.Net.ServicePointManager.SecurityProtocol = 
+                    System.Net.SecurityProtocolType.Tls12 | System.Net.SecurityProtocolType.Tls11 | System.Net.SecurityProtocolType.Tls;
+
+                string? cfgConn = System.Configuration.ConfigurationManager.ConnectionStrings["ERP_Connection"]?.ConnectionString
+                                  ?? System.Configuration.ConfigurationManager.ConnectionStrings["ERP_BanHang"]?.ConnectionString;
+                if (!string.IsNullOrWhiteSpace(cfgConn))
+                {
+                    var builder = new Npgsql.NpgsqlConnectionStringBuilder(cfgConn);
+                    if (builder.Port == 0) builder.Port = 5432;
+                    if (builder.Timeout < 30) builder.Timeout = 30;
+                    if (builder.CommandTimeout < 30) builder.CommandTimeout = 30;
+                    builder.KeepAlive = 30;
+                    builder.SslMode = Npgsql.SslMode.Require;
+                    builder.TrustServerCertificate = true;
+                    CloudConnectionString = builder.ConnectionString;
+                }
+            }
+            catch { }
+        }
 
         // Thuộc tính tương thích ngược
         public static string ConnectionString
@@ -32,6 +56,29 @@ namespace HR_Management.DAL
             {
                 if (UseCloud) CloudConnectionString = value;
                 else SqlServerConnectionString = value;
+            }
+        }
+
+        public static void OpenConnectionWithRetry(DbConnection conn, int maxRetries = 3)
+        {
+            int attempt = 0;
+            while (true)
+            {
+                try
+                {
+                    attempt++;
+                    if (conn.State != ConnectionState.Open)
+                    {
+                        conn.Open();
+                    }
+                    return;
+                }
+                catch (Exception)
+                {
+                    if (attempt >= maxRetries)
+                        throw;
+                    System.Threading.Thread.Sleep(800 * attempt);
+                }
             }
         }
 
@@ -77,7 +124,7 @@ namespace HR_Management.DAL
             try
             {
                 using var conn = GetConnection();
-                conn.Open();
+                OpenConnectionWithRetry(conn, 2);
                 message = UseCloud 
                     ? "Kết nối Cloud PostgreSQL (Neon) thành công!" 
                     : "Kết nối Microsoft SQL Server (MINHTANSQL) thành công!";
@@ -107,7 +154,7 @@ namespace HR_Management.DAL
         public static DataTable ExecuteQuery(string query, DbParameter[]? parameters = null)
         {
             using var conn = GetConnection();
-            conn.Open();
+            OpenConnectionWithRetry(conn);
             string finalQuery = UseCloud ? PrepareQueryForPostgres(query) : query;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = finalQuery;
@@ -176,7 +223,7 @@ namespace HR_Management.DAL
         public static int ExecuteNonQuery(string query, DbParameter[]? parameters = null)
         {
             using var conn = GetConnection();
-            conn.Open();
+            OpenConnectionWithRetry(conn);
             string finalQuery = UseCloud ? PrepareQueryForPostgres(query) : query;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = finalQuery;
@@ -192,7 +239,7 @@ namespace HR_Management.DAL
         public static object? ExecuteScalar(string query, DbParameter[]? parameters = null)
         {
             using var conn = GetConnection();
-            conn.Open();
+            OpenConnectionWithRetry(conn);
             string finalQuery = UseCloud ? PrepareQueryForPostgres(query) : query;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = finalQuery;

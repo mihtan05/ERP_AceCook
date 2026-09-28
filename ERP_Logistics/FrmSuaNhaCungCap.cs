@@ -81,9 +81,11 @@ namespace ERP
             // 1. Kiểm tra các trường dữ liệu bắt buộc
             if (string.IsNullOrWhiteSpace(txtTenNCC.Text) ||
                 string.IsNullOrWhiteSpace(txtDiaChi.Text) ||
-                string.IsNullOrWhiteSpace(txtSDT.Text))
+                string.IsNullOrWhiteSpace(txtSDT.Text) ||
+                string.IsNullOrWhiteSpace(txtTenCN.Text) ||
+                string.IsNullOrWhiteSpace(txtSoHieuCN.Text))
             {
-                MessageBox.Show("Vui lòng điền đầy đủ các thông tin bắt buộc (Tên NCC, Địa chỉ, SĐT)!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Vui lòng điền đầy đủ các thông tin bắt buộc (Tên NCC, Địa chỉ, SĐT, Tên chứng nhận, Số chứng nhận)!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

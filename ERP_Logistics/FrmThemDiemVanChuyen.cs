@@ -15,6 +15,33 @@ namespace ERP
             InitializeComponent();
         }
 
+        // Kiểm tra xem mã điểm vận chuyển có trùng không
+        private bool CheckMaDVCExists(string maDVC)
+        {
+            string query = "SELECT COUNT(*) FROM DiemVanChuyen WHERE MaDVC = @MaDVC";
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    NpgsqlCommand cmd = new NpgsqlCommand(query, conn);
+                    cmd.Parameters.AddWithValue("@MaDVC", maDVC);
+
+                    object result = cmd.ExecuteScalar();
+                    if (result != null && int.TryParse(result.ToString(), out int count))
+                    {
+                        return count > 0;
+                    }
+                    return false;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
         private void btnLuu_Click(object sender, EventArgs e)
         {
             // 1. Kiểm tra các trường dữ liệu bắt buộc (Not Null)
@@ -28,9 +55,19 @@ namespace ERP
                 return;
             }
 
+            string maDVC = txtMaDVC.Text.Trim();
             string sdt = txtSDT_DVC.Text.Trim();
 
-            // 2. Kiểm tra số điện thoại phải đúng 10 chữ số
+            // 2. Kiểm tra xem mã điểm vận chuyển đã tồn tại chưa
+            if (CheckMaDVCExists(maDVC))
+            {
+                MessageBox.Show("Trùng mã điểm vận chuyển!", "Lỗi trùng lặp", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                txtMaDVC.Focus();
+                txtMaDVC.SelectAll();
+                return;
+            }
+
+            // 3. Kiểm tra số điện thoại phải đúng 10 chữ số
             if (!Regex.IsMatch(sdt, @"^\d{10}$"))
             {
                 MessageBox.Show("Số điện thoại không hợp lệ! Số điện thoại phải bao gồm đúng 10 chữ số.", "Lỗi định dạng", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -39,12 +76,11 @@ namespace ERP
                 return;
             }
 
-            string maDVC = txtMaDVC.Text.Trim();
             string tenDVC = txtTenDVC.Text.Trim();
             string diaChiDVC = txtDiaChiDVC.Text.Trim();
             string tenNguoiDaiDien = txtTenNguoiDaiDien.Text.Trim();
 
-            // 3. Câu lệnh SQL INSERT vào bảng DiemVanChuyen
+            // 4. Câu lệnh SQL INSERT vào bảng DiemVanChuyen
             string query = @"INSERT INTO DiemVanChuyen 
                              (MaDVC, TenDVC, DiaChiDVC, SDT_DVC, TenNguoiDaiDien) 
                              VALUES 

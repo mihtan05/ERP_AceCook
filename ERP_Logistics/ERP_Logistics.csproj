@@ -12,6 +12,7 @@
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
+    <NoWin32Manifest>true</NoWin32Manifest>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -82,6 +83,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="UIThemeHelper.cs" />
+    <Compile Include="LogisticsHelper.cs" />
     <Compile Include="FrmSuaDiemVanChuyen.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -136,6 +139,12 @@
     <Compile Include="FrmCapNhatTrangThai.Designer.cs">
       <DependentUpon>FrmCapNhatTrangThai.cs</DependentUpon>
     </Compile>
+    <Compile Include="FrmInPhieuVanDon.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FrmInPhieuVanDon.Designer.cs">
+      <DependentUpon>FrmInPhieuVanDon.cs</DependentUpon>
+    </Compile>
     <Compile Include="QuanLyDonVanChuyen.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -146,6 +155,13 @@
     <Compile Include="DTO\TraHang.cs" />
     <Compile Include="DTO\PhieuTraHang.cs" />
     <Compile Include="DTO\ThongTinYeuCau.cs" />
+    <Compile Include="DTO\ChiTietYeuCauComboItem.cs" />
+    <Compile Include="FrmCapNhatTrangThaiTraHang.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FrmCapNhatTrangThaiTraHang.Designer.cs">
+      <DependentUpon>FrmCapNhatTrangThaiTraHang.cs</DependentUpon>
+    </Compile>
     <Compile Include="DAL\DonVanChuyenDAL.cs" />
     <Compile Include="DAL\TraHangDAL.cs" />
     <Compile Include="DAL\PhieuTraHangDAL.cs" />
@@ -218,4 +234,5 @@
     <None Include="Resources\acecook.jpg" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\ERP_BanHang\packages\Microsoft.NETFramework.ReferenceAssemblies.net48.1.0.3\build\Microsoft.NETFramework.ReferenceAssemblies.net48.targets" Condition="Exists('..\ERP_BanHang\packages\Microsoft.NETFramework.ReferenceAssemblies.net48.1.0.3\build\Microsoft.NETFramework.ReferenceAssemblies.net48.targets')" />
 </Project>

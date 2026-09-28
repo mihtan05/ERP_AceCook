@@ -27,9 +27,9 @@ namespace ERP_BanHang
 
             KhoiTaoCotBang();
             LoadDanhMucIntoComboBox(); // Load danh mục LoaiSP từ CSDL PostgreSQL
-            LoadDataSanPham();          // Load danh sách sản phẩm kết hợp HangHoa
 
             isInitializing = false;
+            LoadDataSanPham();          // Load danh sách sản phẩm kết hợp HangHoa ngay lập tức khi mở form
         }
 
         private void KhoiTaoCotBang()
@@ -42,7 +42,7 @@ namespace ERP_BanHang
             colIDSP.Name = "colIDSP";
             colIDSP.HeaderText = "MÃ SẢN PHẨM";
             colIDSP.DataPropertyName = "ID_SP";
-            colIDSP.FillWeight = 12;
+            colIDSP.FillWeight = 10;
             colIDSP.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colIDSP.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colIDSP.DefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
@@ -54,7 +54,7 @@ namespace ERP_BanHang
             colTenHang.Name = "colTenHang";
             colTenHang.HeaderText = "TÊN SẢN PHẨM";
             colTenHang.DataPropertyName = "TenHang";
-            colTenHang.FillWeight = 30;
+            colTenHang.FillWeight = 25;
             colTenHang.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
             BangSanPham.Columns.Add(colTenHang);
 
@@ -63,7 +63,7 @@ namespace ERP_BanHang
             colLoaiSP.Name = "colLoaiSP";
             colLoaiSP.HeaderText = "LOẠI SẢN PHẨM";
             colLoaiSP.DataPropertyName = "LoaiSP";
-            colLoaiSP.FillWeight = 18;
+            colLoaiSP.FillWeight = 15;
             colLoaiSP.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
             BangSanPham.Columns.Add(colLoaiSP);
 
@@ -72,27 +72,37 @@ namespace ERP_BanHang
             colThuongHieu.Name = "colThuongHieu";
             colThuongHieu.HeaderText = "THƯƠNG HIỆU";
             colThuongHieu.DataPropertyName = "ThuongHieu";
-            colThuongHieu.FillWeight = 16;
+            colThuongHieu.FillWeight = 14;
             colThuongHieu.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
             BangSanPham.Columns.Add(colThuongHieu);
 
-            // 5. Đơn Giá 
+            // 5. Đơn Vi Tinh (MỚI BỔ SUNG)
+            DataGridViewTextBoxColumn colDonViTinh = new DataGridViewTextBoxColumn();
+            colDonViTinh.Name = "colDonViTinh";
+            colDonViTinh.HeaderText = "ĐƠN VỊ TÍNH";
+            colDonViTinh.DataPropertyName = "DonViTinh";
+            colDonViTinh.FillWeight = 10;
+            colDonViTinh.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colDonViTinh.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            BangSanPham.Columns.Add(colDonViTinh);
+
+            // 6. Đơn Giá 
             DataGridViewTextBoxColumn colGiaSP = new DataGridViewTextBoxColumn();
             colGiaSP.Name = "colGiaSP";
             colGiaSP.HeaderText = "ĐƠN GIÁ";
             colGiaSP.DataPropertyName = "GiaSP";
-            colGiaSP.FillWeight = 14;
-            colGiaSP.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colGiaSP.FillWeight = 13;
+            colGiaSP.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             colGiaSP.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colGiaSP.DefaultCellStyle.Format = "N0";
             BangSanPham.Columns.Add(colGiaSP);
 
-            // 6. Tồn Kho 
+            // 7. Tồn Kho / Số Lượng Hàng Hoá
             DataGridViewTextBoxColumn colTonKho = new DataGridViewTextBoxColumn();
             colTonKho.Name = "colTonKho";
-            colTonKho.HeaderText = "TỒN KHO";
+            colTonKho.HeaderText = "SỐ LƯỢNG TỒN";
             colTonKho.DataPropertyName = "TonKho";
-            colTonKho.FillWeight = 10;
+            colTonKho.FillWeight = 13;
             colTonKho.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colTonKho.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colTonKho.DefaultCellStyle.Format = "N0";
@@ -104,13 +114,14 @@ namespace ERP_BanHang
 
         private void LoadDataSanPham()
         {
-            // JOIN giữa SanPham và HangHoa theo MaHang trong PostgreSQL
+            // JOIN giữa SanPham và HangHoa, lấy thêm cột DonViTinh
             string query = @"
                 SELECT 
                     SP.ID_SP,
                     HH.TenHang,
                     SP.LoaiSP,
                     SP.ThuongHieu,
+                    HH.DonViTinh,
                     SP.GiaSP,
                     HH.TonKho
                 FROM SanPham SP
@@ -137,7 +148,6 @@ namespace ERP_BanHang
 
         private void LoadDanhMucIntoComboBox()
         {
-            // Lấy các giá trị LoaiSP duy nhất trực tiếp từ SanPham
             string query = "SELECT DISTINCT LoaiSP FROM SanPham WHERE LoaiSP IS NOT NULL";
 
             using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
@@ -197,7 +207,7 @@ namespace ERP_BanHang
 
         private void LocDuLieu()
         {
-            if (isInitializing || dtSanPham == null) return;
+            if (dtSanPham == null) return;
 
             string keyword = txtSearch.Text.Trim().Replace("'", "''");
             if (keyword == "Tìm mã SP, tên sản phẩm...") keyword = "";
@@ -221,10 +231,7 @@ namespace ERP_BanHang
             BangSanPham.DataSource = dv;
         }
 
-        // ==========================================
-        // KHU VỰC ĐIỀU HƯỚNG SIDEBAR
-        // ==========================================
-
+        // Navigation Handlers ...
         private void btnSanPham_Click(object sender, EventArgs e)
         {
             this.Hide();
@@ -285,29 +292,23 @@ namespace ERP_BanHang
             {
                 try
                 {
-                    // 1. Xóa file phiên làm việc tạm (nếu có)
                     string tempPath = System.IO.Path.Combine(Application.StartupPath, "session.txt");
                     if (System.IO.File.Exists(tempPath))
                     {
                         System.IO.File.Delete(tempPath);
                     }
 
-                    // 2. Thuật toán tìm file ERP_Khach.exe linh hoạt trên mọi máy
                     string baseDir = Application.StartupPath;
                     string targetExe = "ERP_Khach.exe";
                     string pathExeDangNhap = "";
 
-                    // Kiểm tra các vị trí file exe có thể nằm
                     string[] possiblePaths = new string[]
                     {
-                // Khi chạy Release / Đóng gói chung thư mục
-                System.IO.Path.Combine(baseDir, targetExe),
-                System.IO.Path.Combine(baseDir, "..", targetExe),
-                System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
-                
-                // Khi chạy Debug trong Visual Studio
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
+                        System.IO.Path.Combine(baseDir, targetExe),
+                        System.IO.Path.Combine(baseDir, "..", targetExe),
+                        System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
                     };
 
                     foreach (string p in possiblePaths)
@@ -319,11 +320,10 @@ namespace ERP_BanHang
                         }
                     }
 
-                    // 3. Khởi chạy ứng dụng đăng nhập và đóng ứng dụng hiện tại
                     if (!string.IsNullOrEmpty(pathExeDangNhap))
                     {
                         System.Diagnostics.Process.Start(pathExeDangNhap);
-                        Application.Exit(); // Đóng hoàn toàn ERP_BanHang
+                        Application.Exit();
                     }
                     else
                     {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Configuration;
 using System.Data;
 using System.Drawing;
@@ -240,9 +240,9 @@ namespace ERP_Khach
 
                                 // BƯỚC 1: Cập nhật / Thêm mới hoadon
                                 string sqlInsertHD = @"
-                                    INSERT INTO hoadon (id_hd, id_dh, id_nv, ngaylap, tongtien, trangthai)
-                                    VALUES (@ID_HD, @ID_DH, @ID_NV, CURRENT_TIMESTAMP, @TongTien, 'Đã thanh toán')
-                                    ON CONFLICT (id_hd) DO UPDATE SET trangthai = 'Đã thanh toán', id_nv = EXCLUDED.id_nv";
+                                    INSERT INTO hoadon (id_hd, id_dh, id_nv, ngaylap, tratruoc, tongtien, trangthai, hinhthuctt)
+                                    VALUES (@ID_HD, @ID_DH, @ID_NV, CURRENT_TIMESTAMP, @TongTien, @TongTien, 'Đã thanh toán', 'Chuyển khoản')
+                                    ON CONFLICT (id_hd) DO UPDATE SET trangthai = 'Đã thanh toán', tratruoc = EXCLUDED.tratruoc, id_nv = EXCLUDED.id_nv, hinhthuctt = 'Chuyển khoản'";
 
                                 using (NpgsqlCommand cmdInsHD = new NpgsqlCommand(sqlInsertHD, conn, trans))
                                 {
@@ -251,6 +251,25 @@ namespace ERP_Khach
                                     cmdInsHD.Parameters.AddWithValue("@ID_NV", idNV);
                                     cmdInsHD.Parameters.AddWithValue("@TongTien", tongTien);
                                     cmdInsHD.ExecuteNonQuery();
+                                }
+
+                                // BƯỚC 1.1: Đồng bộ chi tiết đơn hàng sang chi tiết hóa đơn
+                                string sqlCopyCT = @"
+                                    INSERT INTO chitiethoadon (id_cthd, id_hd, id_sp, soluong, dongia)
+                                    SELECT 
+                                        'C' || SUBSTRING(hd.id_hd FROM 1 FOR 6) || ROW_NUMBER() OVER (PARTITION BY hd.id_hd ORDER BY ctdh.id_ctdh)::text,
+                                        hd.id_hd,
+                                        ctdh.id_sp,
+                                        ctdh.soluong,
+                                        ctdh.dongia
+                                    FROM hoadon hd
+                                    JOIN chitietdonhang ctdh ON hd.id_dh = ctdh.id_dh
+                                    WHERE hd.id_hd = @ID_HD
+                                    ON CONFLICT (id_cthd) DO NOTHING";
+                                using (NpgsqlCommand cmdCopyCT = new NpgsqlCommand(sqlCopyCT, conn, trans))
+                                {
+                                    cmdCopyCT.Parameters.AddWithValue("@ID_HD", finalMaHD);
+                                    cmdCopyCT.ExecuteNonQuery();
                                 }
 
                                 // BƯỚC 2: Cập nhật donhang

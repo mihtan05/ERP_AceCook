@@ -14,6 +14,10 @@ namespace ERP
         private System.Data.DataTable dtPhuongTienRanh;
         private bool isFilteringXe = false;
 
+        private const string ALL_LOAI_XE = "-- Tất cả loại xe --";
+        private const string ALL_TRONG_TAI = "-- Tất cả tải trọng --";
+        private const string CHON_BIEN_SO = "-- Chọn biển số xe --";
+
         public FrmPhieuTraHang(string idPhieuTra = null)
         {
             InitializeComponent();
@@ -37,9 +41,25 @@ namespace ERP
                     {
                         dtpNgayTra.Value = p.NgayTra;
                         
-                        if (!cboID_CTYC.Items.Contains(p.ID_CTYC) && !string.IsNullOrEmpty(p.ID_CTYC))
+                        int foundIdx = -1;
+                        for (int i = 0; i < cboID_CTYC.Items.Count; i++)
+                        {
+                            string cid = (cboID_CTYC.Items[i] as ChiTietYeuCauComboItem)?.ID_CTYC ?? cboID_CTYC.Items[i].ToString();
+                            if (cid == p.ID_CTYC)
+                            {
+                                foundIdx = i;
+                                break;
+                            }
+                        }
+                        if (foundIdx >= 0)
+                        {
+                            cboID_CTYC.SelectedIndex = foundIdx;
+                        }
+                        else if (!string.IsNullOrEmpty(p.ID_CTYC))
+                        {
                             cboID_CTYC.Items.Add(p.ID_CTYC);
-                        cboID_CTYC.SelectedItem = p.ID_CTYC;
+                            cboID_CTYC.SelectedItem = p.ID_CTYC;
+                        }
                         
                         if (!cboMaDVC.Items.Contains(p.MaDVC) && !string.IsNullOrEmpty(p.MaDVC))
                         {
@@ -50,7 +70,9 @@ namespace ERP
                         
                         if (!cboTrangThai.Items.Contains(p.TrangThai) && !string.IsNullOrEmpty(p.TrangThai))
                             cboTrangThai.Items.Add(p.TrangThai);
-                        cboTrangThai.SelectedItem = p.TrangThai;
+                        string ttHienThi = p.TrangThai == "Đã nhập kho" ? "Đã xử lý" : p.TrangThai;
+                        if (!cboTrangThai.Items.Contains(ttHienThi) && !string.IsNullOrEmpty(ttHienThi)) cboTrangThai.Items.Add(ttHienThi);
+                        cboTrangThai.SelectedItem = ttHienThi;
                         
                         // Initialize correctly for editing
                         isFilteringXe = true;
@@ -58,20 +80,59 @@ namespace ERP
                         string bx = p.BienSoXe;
                         if (!string.IsNullOrEmpty(bx))
                         {
-                            foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
+                            System.Data.DataRow xeRow = null;
+                            if (dtPhuongTienRanh != null)
                             {
-                                if (row["BienSoXe"].ToString() == bx)
+                                foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
                                 {
-                                    cboLoaiXe.SelectedItem = row["LoaiXe"].ToString();
-                                    cboTrongTai.SelectedItem = row["TaiTrong"].ToString();
-                                    cboBienSoXe.SelectedItem = bx;
-                                    txtTaiXe.Text = row["TenTaiXe"].ToString();
-                                    break;
+                                    if (row["BienSoXe"].ToString() == bx)
+                                    {
+                                        xeRow = row;
+                                        break;
+                                    }
                                 }
                             }
-                            if (cboBienSoXe.SelectedItem == null)
+
+                            if (xeRow != null)
                             {
-                                cboBienSoXe.Items.Add(bx);
+                                string lx = xeRow["LoaiXe"].ToString();
+                                string tt = xeRow["TaiTrong"].ToString();
+
+                                if (cboLoaiXe.Items.Contains(lx))
+                                    cboLoaiXe.SelectedItem = lx;
+
+                                // Lọc trọng tải theo lx
+                                cboTrongTai.Items.Clear();
+                                cboTrongTai.Items.Add(ALL_TRONG_TAI);
+                                var listTrongTai = new List<string>();
+                                foreach (System.Data.DataRow r in dtPhuongTienRanh.Rows)
+                                {
+                                    if (r["LoaiXe"].ToString() == lx)
+                                    {
+                                        string t = r["TaiTrong"].ToString();
+                                        if (!string.IsNullOrEmpty(t) && !listTrongTai.Contains(t))
+                                            listTrongTai.Add(t);
+                                    }
+                                }
+                                listTrongTai.Sort();
+                                foreach (var t in listTrongTai) cboTrongTai.Items.Add(t);
+                                if (cboTrongTai.Items.Contains(tt)) cboTrongTai.SelectedItem = tt;
+
+                                // Lọc biển số
+                                cboBienSoXe.Items.Clear();
+                                cboBienSoXe.Items.Add(CHON_BIEN_SO);
+                                foreach (System.Data.DataRow r in dtPhuongTienRanh.Rows)
+                                {
+                                    if (r["LoaiXe"].ToString() == lx && r["TaiTrong"].ToString() == tt)
+                                        cboBienSoXe.Items.Add(r["BienSoXe"].ToString());
+                                }
+                                if (!cboBienSoXe.Items.Contains(bx)) cboBienSoXe.Items.Add(bx);
+                                cboBienSoXe.SelectedItem = bx;
+                                txtTaiXe.Text = xeRow["TenTaiXe"].ToString();
+                            }
+                            else
+                            {
+                                if (!cboBienSoXe.Items.Contains(bx)) cboBienSoXe.Items.Add(bx);
                                 cboBienSoXe.SelectedItem = bx;
                             }
                         }
@@ -88,7 +149,17 @@ namespace ERP
             else
             {
                 this.Text = "Thêm mới Lệnh Điều Xe";
-                txtID_PhieuTra.Enabled = true;
+                
+                try
+                {
+                    txtID_PhieuTra.Text = bll.SinhMaPhieu();
+                }
+                catch
+                {
+                    txtID_PhieuTra.Text = "PTH001";
+                }
+                txtID_PhieuTra.Enabled = false; 
+
                 dtpNgayTra.Value = DateTime.Now;
                 if (cboTrangThai.Items.Count > 0)
                     cboTrangThai.SelectedIndex = 0;
@@ -99,7 +170,9 @@ namespace ERP
         private void KhoaThongTinTheoTrangThai(string trangThai)
         {
             bool choSuaThongTin = string.IsNullOrEmpty(idPhieuTra) || trangThai == "Chờ xử lý";
-            bool daKetThuc = trangThai == "Đã nhập kho" || trangThai == "Đã hủy";
+            bool daKetThuc = trangThai == "Đã xử lý" || trangThai == "Đã nhập kho" || trangThai == "Đã hủy" || trangThai == "Từ chối";
+            btnLuu.Enabled = !daKetThuc;
+            if (daKetThuc) btnLuu.Text = "🔒 Đã khóa";
 
             cboID_CTYC.Enabled = choSuaThongTin;
             cboMaDVC.Enabled = choSuaThongTin;
@@ -108,6 +181,7 @@ namespace ERP
             cboLoaiXe.Enabled = choSuaThongTin;
             cboTrongTai.Enabled = choSuaThongTin;
             cboBienSoXe.Enabled = choSuaThongTin;
+            btnDatLaiXe.Enabled = choSuaThongTin;
             cboTrangThai.Enabled = !daKetThuc;
         }
 
@@ -115,9 +189,9 @@ namespace ERP
         {
             try
             {
-                // Load CTYC
+                // Load CTYC dạng đầy đủ thông tin nhận diện
                 cboID_CTYC.Items.Clear();
-                List<string> dsCTYC = bll.GetDanhSachCTYC();
+                List<ChiTietYeuCauComboItem> dsCTYC = bll.GetDanhSachChiTietYeuCauFull();
                 foreach (var item in dsCTYC) cboID_CTYC.Items.Add(item);
                 if (cboID_CTYC.Items.Count > 0) cboID_CTYC.SelectedIndex = 0;
 
@@ -139,35 +213,65 @@ namespace ERP
 
                 // Load PhuongTien
                 dtPhuongTienRanh = bll.GetAllPhuongTienRanh(idPhieuTra);
-                
-                cboLoaiXe.Items.Clear();
-                cboTrongTai.Items.Clear();
-                cboBienSoXe.Items.Clear();
-                
-                HashSet<string> loaiXeSet = new HashSet<string>();
-                HashSet<string> trongTaiSet = new HashSet<string>();
-                HashSet<string> bienSoSet = new HashSet<string>();
-                
-                foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
-                {
-                    loaiXeSet.Add(row["LoaiXe"].ToString());
-                    trongTaiSet.Add(row["TaiTrong"].ToString());
-                    bienSoSet.Add(row["BienSoXe"].ToString());
-                }
-                
-                foreach (var item in loaiXeSet) cboLoaiXe.Items.Add(item);
-                foreach (var item in trongTaiSet) cboTrongTai.Items.Add(item);
-                foreach (var item in bienSoSet) cboBienSoXe.Items.Add(item);
+                ResetDanhSachXe();
 
                 // Load TrangThai
                 cboTrangThai.Items.Clear();
-                cboTrangThai.Items.AddRange(new string[] { "Chờ xử lý", "Đang thu hồi", "Đã nhập kho", "Đã hủy" });
+                cboTrangThai.Items.AddRange(new string[] { "Chờ xử lý", "Đang thu hồi", "Đã xử lý", "Đã hủy" });
                 cboTrangThai.SelectedIndex = 0;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi tải danh mục: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ResetDanhSachXe()
+        {
+            if (dtPhuongTienRanh == null) return;
+            isFilteringXe = true;
+
+            // Nạp Loại xe: giữ nguyên danh mục tất cả loại xe có trong DB
+            cboLoaiXe.Items.Clear();
+            cboLoaiXe.Items.Add(ALL_LOAI_XE);
+            var loaiXeList = new List<string>();
+            foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
+            {
+                string lx = row["LoaiXe"].ToString();
+                if (!string.IsNullOrEmpty(lx) && !loaiXeList.Contains(lx))
+                    loaiXeList.Add(lx);
+            }
+            loaiXeList.Sort();
+            foreach (var lx in loaiXeList) cboLoaiXe.Items.Add(lx);
+            cboLoaiXe.SelectedIndex = 0;
+
+            // Nạp Trọng tải: tất cả các trọng tải
+            cboTrongTai.Items.Clear();
+            cboTrongTai.Items.Add(ALL_TRONG_TAI);
+            var trongTaiList = new List<string>();
+            foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
+            {
+                string tt = row["TaiTrong"].ToString();
+                if (!string.IsNullOrEmpty(tt) && !trongTaiList.Contains(tt))
+                    trongTaiList.Add(tt);
+            }
+            trongTaiList.Sort();
+            foreach (var tt in trongTaiList) cboTrongTai.Items.Add(tt);
+            cboTrongTai.SelectedIndex = 0;
+
+            // Nạp Biển số xe: tất cả các biển số xe rảnh
+            cboBienSoXe.Items.Clear();
+            cboBienSoXe.Items.Add(CHON_BIEN_SO);
+            foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
+            {
+                string bs = row["BienSoXe"].ToString();
+                if (!string.IsNullOrEmpty(bs))
+                    cboBienSoXe.Items.Add(bs);
+            }
+            cboBienSoXe.SelectedIndex = 0;
+            txtTaiXe.Text = "";
+
+            isFilteringXe = false;
         }
 
         private void cboMaDVC_SelectedIndexChanged(object sender, EventArgs e)
@@ -196,7 +300,8 @@ namespace ERP
         {
             if (cboID_CTYC.SelectedItem != null)
             {
-                string idCTYC = cboID_CTYC.SelectedItem.ToString();
+                string idCTYC = (cboID_CTYC.SelectedItem as ChiTietYeuCauComboItem)?.ID_CTYC
+                                ?? cboID_CTYC.SelectedItem.ToString().Split('|')[0].Trim();
                 try
                 {
                     ThongTinYeuCau tt = bll.GetThongTinYeuCau(idCTYC);
@@ -206,6 +311,30 @@ namespace ERP
                         txtSoLuong.Text = tt.SoLuong.ToString();
                         txtLyDo.Text = tt.LyDo;
                         txtKhachHang.Text = tt.KhachHang;
+
+                        // Tự động nhận diện và gán Điểm giao nhận theo địa chỉ khách hàng
+                        if (!string.IsNullOrWhiteSpace(tt.DiaChiKhachHang))
+                        {
+                            try
+                            {
+                                DiemVanChuyenComboItem diem = bll.LayHoacTaoDiemThuHoiChoKhachHang(tt.KhachHang, tt.DiaChiKhachHang, tt.SDTKhachHang);
+                                if (diem != null)
+                                {
+                                    int idx = cboMaDVC.Items.IndexOf(diem.MaDVC);
+                                    if (idx >= 0)
+                                    {
+                                        cboMaDVC.SelectedIndex = idx;
+                                    }
+                                    else
+                                    {
+                                        cboMaDVC.Items.Add(diem.MaDVC);
+                                        cboTenDVC.Items.Add(diem.TenDVC);
+                                        cboMaDVC.SelectedItem = diem.MaDVC;
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
                     }
                     else
                     {
@@ -222,87 +351,170 @@ namespace ERP
             }
         }
 
-        private void FilterXe()
+        private void cboLoaiXe_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (isFilteringXe || dtPhuongTienRanh == null) return;
             isFilteringXe = true;
-            
-            string selectedLoaiXe = cboLoaiXe.SelectedItem?.ToString();
-            string selectedTrongTai = cboTrongTai.SelectedItem?.ToString();
-            string selectedBienSo = cboBienSoXe.SelectedItem?.ToString();
-            
-            HashSet<string> loaiXeSet = new HashSet<string>();
-            HashSet<string> trongTaiSet = new HashSet<string>();
-            HashSet<string> bienSoSet = new HashSet<string>();
-            
-            string taiXe = "";
-            
+
+            string selectedLoai = cboLoaiXe.SelectedItem?.ToString();
+            bool isAllLoai = string.IsNullOrEmpty(selectedLoai) || selectedLoai == ALL_LOAI_XE;
+
+            // Lọc lại Trọng tải theo Loại xe đang chọn
+            string prevTrongTai = cboTrongTai.SelectedItem?.ToString();
+            cboTrongTai.Items.Clear();
+            cboTrongTai.Items.Add(ALL_TRONG_TAI);
+            var listTrongTai = new List<string>();
             foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
             {
-                bool matchLoai = string.IsNullOrEmpty(selectedLoaiXe) || row["LoaiXe"].ToString() == selectedLoaiXe;
-                bool matchTrongTai = string.IsNullOrEmpty(selectedTrongTai) || row["TaiTrong"].ToString() == selectedTrongTai;
-                bool matchBienSo = string.IsNullOrEmpty(selectedBienSo) || row["BienSoXe"].ToString() == selectedBienSo;
-                
-                if (matchLoai && matchTrongTai && matchBienSo)
+                if (isAllLoai || row["LoaiXe"].ToString() == selectedLoai)
                 {
-                    loaiXeSet.Add(row["LoaiXe"].ToString());
-                    trongTaiSet.Add(row["TaiTrong"].ToString());
-                    bienSoSet.Add(row["BienSoXe"].ToString());
-                    taiXe = row["TenTaiXe"].ToString();
+                    string tt = row["TaiTrong"].ToString();
+                    if (!string.IsNullOrEmpty(tt) && !listTrongTai.Contains(tt))
+                        listTrongTai.Add(tt);
                 }
             }
-            
-            // Re-populate combos
-            cboLoaiXe.Items.Clear();
-            foreach (var item in loaiXeSet) cboLoaiXe.Items.Add(item);
-            if (!string.IsNullOrEmpty(selectedLoaiXe) && loaiXeSet.Contains(selectedLoaiXe)) cboLoaiXe.SelectedItem = selectedLoaiXe;
-            
-            cboTrongTai.Items.Clear();
-            foreach (var item in trongTaiSet) cboTrongTai.Items.Add(item);
-            if (!string.IsNullOrEmpty(selectedTrongTai) && trongTaiSet.Contains(selectedTrongTai)) cboTrongTai.SelectedItem = selectedTrongTai;
-            
-            cboBienSoXe.Items.Clear();
-            foreach (var item in bienSoSet) cboBienSoXe.Items.Add(item);
-            if (!string.IsNullOrEmpty(selectedBienSo) && bienSoSet.Contains(selectedBienSo)) cboBienSoXe.SelectedItem = selectedBienSo;
-            
-            if (!string.IsNullOrEmpty(selectedLoaiXe) && !string.IsNullOrEmpty(selectedTrongTai) && !string.IsNullOrEmpty(selectedBienSo))
-            {
-                txtTaiXe.Text = taiXe;
-            }
+            listTrongTai.Sort();
+            foreach (var tt in listTrongTai) cboTrongTai.Items.Add(tt);
+
+            if (!string.IsNullOrEmpty(prevTrongTai) && cboTrongTai.Items.Contains(prevTrongTai))
+                cboTrongTai.SelectedItem = prevTrongTai;
             else
-            {
-                txtTaiXe.Text = "";
-            }
-            
+                cboTrongTai.SelectedIndex = 0;
+
+            // Lọc lại Biển số xe theo Loại xe và Trọng tải
+            FilterBienSoXe();
+
             isFilteringXe = false;
         }
 
-        private void cboLoaiXe_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            FilterXe();
-        }
-        
         private void cboTrongTai_SelectedIndexChanged(object sender, EventArgs e)
         {
-            FilterXe();
+            if (isFilteringXe || dtPhuongTienRanh == null) return;
+            isFilteringXe = true;
+
+            FilterBienSoXe();
+
+            isFilteringXe = false;
         }
-        
+
+        private void FilterBienSoXe()
+        {
+            string selectedLoai = cboLoaiXe.SelectedItem?.ToString();
+            string selectedTrongTai = cboTrongTai.SelectedItem?.ToString();
+            string prevBienSo = cboBienSoXe.SelectedItem?.ToString();
+
+            bool isAllLoai = string.IsNullOrEmpty(selectedLoai) || selectedLoai == ALL_LOAI_XE;
+            bool isAllTrongTai = string.IsNullOrEmpty(selectedTrongTai) || selectedTrongTai == ALL_TRONG_TAI;
+
+            cboBienSoXe.Items.Clear();
+            cboBienSoXe.Items.Add(CHON_BIEN_SO);
+
+            foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
+            {
+                bool matchLoai = isAllLoai || row["LoaiXe"].ToString() == selectedLoai;
+                bool matchTrongTai = isAllTrongTai || row["TaiTrong"].ToString() == selectedTrongTai;
+
+                if (matchLoai && matchTrongTai)
+                {
+                    cboBienSoXe.Items.Add(row["BienSoXe"].ToString());
+                }
+            }
+
+            if (!string.IsNullOrEmpty(prevBienSo) && cboBienSoXe.Items.Contains(prevBienSo) && prevBienSo != CHON_BIEN_SO)
+            {
+                cboBienSoXe.SelectedItem = prevBienSo;
+            }
+            else
+            {
+                cboBienSoXe.SelectedIndex = 0;
+                txtTaiXe.Text = "";
+            }
+        }
+
         private void cboBienSoXe_SelectedIndexChanged(object sender, EventArgs e)
         {
-            FilterXe();
+            if (isFilteringXe || dtPhuongTienRanh == null) return;
+
+            string selectedBienSo = cboBienSoXe.SelectedItem?.ToString();
+            if (string.IsNullOrEmpty(selectedBienSo) || selectedBienSo == CHON_BIEN_SO)
+            {
+                txtTaiXe.Text = "";
+                return;
+            }
+
+            // Tự động nhận diện và đồng bộ Loại xe, Trọng tải, Tài xế
+            foreach (System.Data.DataRow row in dtPhuongTienRanh.Rows)
+            {
+                if (row["BienSoXe"].ToString() == selectedBienSo)
+                {
+                    isFilteringXe = true;
+                    string lx = row["LoaiXe"].ToString();
+                    string tt = row["TaiTrong"].ToString();
+                    txtTaiXe.Text = row["TenTaiXe"].ToString();
+
+                    // Đồng bộ Loại xe nếu khác
+                    if (cboLoaiXe.Items.Contains(lx) && cboLoaiXe.SelectedItem?.ToString() != lx)
+                    {
+                        cboLoaiXe.SelectedItem = lx;
+
+                        // Đồng bộ lại danh sách trọng tải tương ứng
+                        cboTrongTai.Items.Clear();
+                        cboTrongTai.Items.Add(ALL_TRONG_TAI);
+                        var listTrongTai = new List<string>();
+                        foreach (System.Data.DataRow r in dtPhuongTienRanh.Rows)
+                        {
+                            if (r["LoaiXe"].ToString() == lx)
+                            {
+                                string t = r["TaiTrong"].ToString();
+                                if (!string.IsNullOrEmpty(t) && !listTrongTai.Contains(t))
+                                    listTrongTai.Add(t);
+                            }
+                        }
+                        listTrongTai.Sort();
+                        foreach (var t in listTrongTai) cboTrongTai.Items.Add(t);
+                    }
+
+                    // Đồng bộ Trọng tải
+                    if (cboTrongTai.Items.Contains(tt))
+                    {
+                        cboTrongTai.SelectedItem = tt;
+                    }
+
+                    isFilteringXe = false;
+                    break;
+                }
+            }
         }
+
+        private void btnDatLaiXe_Click(object sender, EventArgs e)
+        {
+            ResetDanhSachXe();
+        }
+
         private void btnLuu_Click(object sender, EventArgs e)
         {
             try
             {
+                string idCTYC = (cboID_CTYC.SelectedItem as ChiTietYeuCauComboItem)?.ID_CTYC
+                                ?? cboID_CTYC.SelectedItem?.ToString().Split('|')[0].Trim()
+                                ?? cboID_CTYC.Text.Trim();
+
+                string bienSo = cboBienSoXe.SelectedItem?.ToString() ?? cboBienSoXe.Text.Trim();
+                if (string.IsNullOrWhiteSpace(bienSo) || bienSo == CHON_BIEN_SO)
+                {
+                    MessageBox.Show("Vui lòng chọn biển số xe điều phối!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    cboBienSoXe.Focus();
+                    return;
+                }
+
                 PhieuTraHang p = new PhieuTraHang
                 {
                     ID_PhieuTra = txtID_PhieuTra.Text.Trim(),
                     NgayTra = dtpNgayTra.Value,
                     MaDVC = cboMaDVC.SelectedItem?.ToString() ?? cboMaDVC.Text.Trim(),
-                    ID_CTYC = cboID_CTYC.SelectedItem?.ToString() ?? cboID_CTYC.Text.Trim(),
+                    ID_CTYC = idCTYC,
                     TrangThai = cboTrangThai.SelectedItem?.ToString() ?? "Chờ xử lý",
-                    BienSoXe = cboBienSoXe.SelectedItem?.ToString() ?? cboBienSoXe.Text.Trim()
+                    BienSoXe = bienSo
                 };
 
                 if (string.IsNullOrEmpty(idPhieuTra))

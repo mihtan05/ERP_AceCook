@@ -1,20 +1,42 @@
 ﻿using System;
 using System.Configuration;
 using System.Data;
-using Npgsql; // Đã đổi từ System.Data.SqlClient sang Npgsql
 using System.Drawing;
 using System.Windows.Forms;
+using Npgsql;
 
 namespace ERP_BanHang
 {
     public partial class QlyGiaoHang : Form
     {
-        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"].ConnectionString;
+        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"]?.ConnectionString
+            ?? ConfigurationManager.ConnectionStrings["ERP_BanHang"]?.ConnectionString;
+
         private DataTable dtGiaoHang;
+
+        // Khai báo Timer để Auto Load dữ liệu
+        private Timer autoLoadTimer;
 
         public QlyGiaoHang()
         {
             InitializeComponent();
+            KhoiTaoAutoLoadTimer(); // Khởi tạo bộ đếm thời gian
+        }
+
+        // ==========================================
+        // CẤU HÌNH AUTO LOAD TIMER
+        // ==========================================
+        private void KhoiTaoAutoLoadTimer()
+        {
+            autoLoadTimer = new Timer();
+            autoLoadTimer.Interval = 5000; // Tự động làm mới dữ liệu mỗi 5000 ms (5 giây)
+            autoLoadTimer.Tick += AutoLoadTimer_Tick;
+        }
+
+        private void AutoLoadTimer_Tick(object sender, EventArgs e)
+        {
+            // Tự động tải lại dữ liệu ngầm từ CSDL PostgreSQL
+            LoadDataGiaoHang();
         }
 
         private void QlyGiaoHang_Load(object sender, EventArgs e)
@@ -26,6 +48,36 @@ namespace ERP_BanHang
 
             KhoiTaoCotBang();
             LoadDataGiaoHang();
+
+            // Bắt đầu chạy Auto Load
+            autoLoadTimer.Start();
+        }
+
+        // Khi người dùng chuyển tab hoặc đóng form thì tạm dừng Timer để tiết kiệm tài nguyên
+        private void QlyGiaoHang_Activated(object sender, EventArgs e)
+        {
+            LoadDataGiaoHang();
+            if (autoLoadTimer != null && !autoLoadTimer.Enabled)
+            {
+                autoLoadTimer.Start();
+            }
+        }
+
+        private void QlyGiaoHang_Deactivate(object sender, EventArgs e)
+        {
+            if (autoLoadTimer != null)
+            {
+                autoLoadTimer.Stop();
+            }
+        }
+
+        private void QlyGiaoHang_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (autoLoadTimer != null)
+            {
+                autoLoadTimer.Stop();
+                autoLoadTimer.Dispose();
+            }
         }
 
         private void KhoiTaoCotBang()
@@ -90,9 +142,18 @@ namespace ERP_BanHang
             dgvGiaoHang.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
 
+        // ==========================================
+        // TẢI DỮ LIỆU TỪ POSTGRESQL (AUTO REFRESH)
+        // ==========================================
         private void LoadDataGiaoHang()
         {
-            // PostgreSQL: Thay ISNULL thành COALESCE
+            // Lưu lại vị trí dòng người dùng đang chọn để không bị giật/mất vị trí khi auto reload
+            int currentRowIndex = -1;
+            if (dgvGiaoHang.CurrentRow != null)
+            {
+                currentRowIndex = dgvGiaoHang.CurrentRow.Index;
+            }
+
             string query = @"
                 SELECT 
                     GH.ID_GH,
@@ -102,9 +163,9 @@ namespace ERP_BanHang
                     COALESCE(GH.DiaChiGiaoHang, KH.DiaChi) AS DiaChiGiaoHang,
                     COALESCE(GH.SDTNguoiNhan, KH.SDT) AS SDTNguoiNhan,
                     COALESCE(GH.TrangThaiGiaoHang, N'Chưa giao') AS TrangThaiGiaoHang
-                FROM GiaoHang GH
-                INNER JOIN DonHang DH ON GH.ID_DH = DH.ID_DH
+                FROM DonHang DH
                 INNER JOIN KhachHang KH ON DH.ID_KH = KH.ID_KH
+                LEFT JOIN GiaoHang GH ON DH.ID_DH = GH.ID_DH
                 ORDER BY DH.NgayTao DESC";
 
             using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
@@ -113,14 +174,21 @@ namespace ERP_BanHang
                 {
                     conn.Open();
                     NpgsqlDataAdapter da = new NpgsqlDataAdapter(query, conn);
-                    dtGiaoHang = new DataTable();
-                    da.Fill(dtGiaoHang);
+                    DataTable dtTemp = new DataTable();
+                    da.Fill(dtTemp);
 
-                    dgvGiaoHang.DataSource = dtGiaoHang;
+                    dtGiaoHang = dtTemp;
+                    LocDuLieu();
+
+                    // Khôi phục vị trí dòng được chọn trước khi làm mới
+                    if (currentRowIndex >= 0 && currentRowIndex < dgvGiaoHang.Rows.Count)
+                    {
+                        dgvGiaoHang.Rows[currentRowIndex].Selected = true;
+                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    MessageBox.Show("Lỗi kết nối CSDL khi tải danh sách giao hàng: " + ex.Message, "Lỗi PostgreSQL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    // Tùy chọn bỏ qua thông báo lỗi popup để tránh gián đoạn người dùng khi mất mạng thoáng qua
                 }
             }
         }
@@ -146,6 +214,7 @@ namespace ERP_BanHang
                 {
                     e.CellStyle.BackColor = Color.FromArgb(248, 215, 218);
                     e.CellStyle.ForeColor = Color.FromArgb(114, 28, 36);
+                    e.CellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
                 }
             }
         }
@@ -187,7 +256,7 @@ namespace ERP_BanHang
         }
 
         // ==========================================
-        // XỬ LÝ PHÂN CÔNG VẬN CHUYỂN (CÓ ĐIỀU KIỆN)
+        // XỬ LÝ PHÂN CÔNG & ĐỒNG BỘ SANG LOGISTICS
         // ==========================================
         private void btnPhanCongNV_Click(object sender, EventArgs e)
         {
@@ -201,7 +270,6 @@ namespace ERP_BanHang
             string tenKhach = dgvGiaoHang.CurrentRow.Cells["colTenKhachHang"].Value?.ToString();
             string trangThaiHienTai = dgvGiaoHang.CurrentRow.Cells["colTrangThaiGiao"].Value?.ToString();
 
-            // RÀNG BUỘC ĐIỀU KIỆN: Chỉ cho phép phân công đơn ở trạng thái "Chưa giao" hoặc "Chờ giao"
             if (trangThaiHienTai == "Đang giao" || trangThaiHienTai == "Đã giao")
             {
                 MessageBox.Show($"Đơn hàng [{idDH}] đang ở trạng thái '{trangThaiHienTai}'.\nKhông thể phân công lại cho đơn đã hoặc đang vận chuyển!",
@@ -219,17 +287,69 @@ namespace ERP_BanHang
 
             if (confirm == DialogResult.Yes)
             {
+                CapNhatTrangThaiGiaoCSDL(idDH, "Đang giao");
+
                 MessageBox.Show($"Đã phát yêu cầu điều phối vận chuyển cho đơn hàng [{idDH}] thành công!\nThông tin đơn đã được chuyển sang bộ phận vận chuyển.",
                                 "Phân công thành công",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Information);
+
+                LoadDataGiaoHang();
+            }
+        }
+
+        private void CapNhatTrangThaiGiaoCSDL(string idDH, string trangThaiMoi)
+        {
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    NpgsqlTransaction transaction = conn.BeginTransaction();
+
+                    try
+                    {
+                        string sqlGiaoHang = @"
+                            INSERT INTO GiaoHang (ID_DH, TrangThaiGiaoHang)
+                            VALUES (@ID_DH, @TrangThai)
+                            ON CONFLICT (ID_DH) 
+                            DO UPDATE SET TrangThaiGiaoHang = EXCLUDED.TrangThaiGiaoHang;";
+
+                        using (NpgsqlCommand cmd1 = new NpgsqlCommand(sqlGiaoHang, conn, transaction))
+                        {
+                            cmd1.Parameters.AddWithValue("@ID_DH", idDH);
+                            cmd1.Parameters.AddWithValue("@TrangThai", trangThaiMoi);
+                            cmd1.ExecuteNonQuery();
+                        }
+
+                        if (trangThaiMoi == "Đã giao")
+                        {
+                            string sqlHoaDon = "UPDATE HoaDon SET TrangThai = N'Đã thanh toán' WHERE ID_DH = @ID_DH;";
+                            using (NpgsqlCommand cmd2 = new NpgsqlCommand(sqlHoaDon, conn, transaction))
+                            {
+                                cmd2.Parameters.AddWithValue("@ID_DH", idDH);
+                                cmd2.ExecuteNonQuery();
+                            }
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Lỗi cập nhật CSDL: " + ex.Message, "Lỗi PostgreSQL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
         // ==========================================
         // KHU VỰC ĐIỀU HƯỚNG SIDEBAR
         // ==========================================
-
         private void btnSanPham_Click(object sender, EventArgs e)
         {
             this.Hide();
@@ -290,29 +410,23 @@ namespace ERP_BanHang
             {
                 try
                 {
-                    // 1. Xóa file phiên làm việc tạm (nếu có)
                     string tempPath = System.IO.Path.Combine(Application.StartupPath, "session.txt");
                     if (System.IO.File.Exists(tempPath))
                     {
                         System.IO.File.Delete(tempPath);
                     }
 
-                    // 2. Thuật toán tìm file ERP_Khach.exe linh hoạt trên mọi máy
                     string baseDir = Application.StartupPath;
                     string targetExe = "ERP_Khach.exe";
                     string pathExeDangNhap = "";
 
-                    // Kiểm tra các vị trí file exe có thể nằm
                     string[] possiblePaths = new string[]
                     {
-                // Khi chạy Release / Đóng gói chung thư mục
-                System.IO.Path.Combine(baseDir, targetExe),
-                System.IO.Path.Combine(baseDir, "..", targetExe),
-                System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
-                
-                // Khi chạy Debug trong Visual Studio
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
+                        System.IO.Path.Combine(baseDir, targetExe),
+                        System.IO.Path.Combine(baseDir, "..", targetExe),
+                        System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
                     };
 
                     foreach (string p in possiblePaths)
@@ -324,11 +438,10 @@ namespace ERP_BanHang
                         }
                     }
 
-                    // 3. Khởi chạy ứng dụng đăng nhập và đóng ứng dụng hiện tại
                     if (!string.IsNullOrEmpty(pathExeDangNhap))
                     {
                         System.Diagnostics.Process.Start(pathExeDangNhap);
-                        Application.Exit(); // Đóng hoàn toàn ERP_BanHang
+                        Application.Exit();
                     }
                     else
                     {

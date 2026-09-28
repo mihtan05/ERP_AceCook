@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using ERP.DAL;
 using ERP.DTO;
@@ -20,6 +20,11 @@ namespace ERP.BLL
             dal = new PhieuTraHangDAL(connectionString);
         }
 
+        public string SinhMaPhieu()
+        {
+            return dal.GetNextID();
+        }
+
         public List<PhieuTraHang> GetAll()
         {
             return dal.GetAll();
@@ -33,6 +38,17 @@ namespace ERP.BLL
         public List<string> GetDanhSachCTYC()
         {
             return dal.GetDanhSachCTYC();
+        }
+
+        public List<ChiTietYeuCauComboItem> GetDanhSachChiTietYeuCauFull()
+        {
+            return dal.GetDanhSachChiTietYeuCauFull();
+        }
+
+        public DiemVanChuyenComboItem LayHoacTaoDiemThuHoiChoKhachHang(string tenKhach, string diaChi, string sdt)
+        {
+            var donVCDAL = new DonVanChuyenDAL();
+            return donVCDAL.LayHoacTaoDiemNhanHangChoKhachHang(tenKhach, diaChi, sdt);
         }
 
         public List<string> GetDanhSachMaDVC()
@@ -63,6 +79,11 @@ namespace ERP.BLL
         public bool CheckXeDangBan(string bienSoXe, string idPhieuLoaiTru = null)
         {
             return dal.CheckXeDangBan(bienSoXe, idPhieuLoaiTru);
+        }
+
+        public bool CheckXeDangBan(string bienSoXe, string idPhieuLoaiTru, out string lyDoBan)
+        {
+            return dal.CheckXeDangBan(bienSoXe, idPhieuLoaiTru, out lyDoBan);
         }
 
         public ThongTinYeuCau GetThongTinYeuCau(string idCTYC)
@@ -118,9 +139,9 @@ namespace ERP.BLL
                 throw new Exception("Yêu cầu lỗi này đã được tạo phiếu thu hồi trước đó!");
             }
 
-            if (dal.CheckXeDangBan(p.BienSoXe.Trim(), null))
+            if (dal.CheckXeDangBan(p.BienSoXe.Trim(), null, out string lyDoBan))
             {
-                throw new Exception($"Xe tải '{p.BienSoXe}' hiện đang được điều động cho lệnh thu hồi khác (chưa hoàn thành), không thể chọn xe này!");
+                throw new Exception(lyDoBan);
             }
 
             p.TrangThai = ChuanHoaTrangThai(p.TrangThai);
@@ -169,14 +190,14 @@ namespace ERP.BLL
             p.TrangThai = ChuanHoaTrangThai(p.TrangThai);
             string trangThaiCu = ChuanHoaTrangThai(hienTai.TrangThai);
 
-            if (trangThaiCu == "Đã nhập kho" || trangThaiCu == "Đã hủy")
+            if (trangThaiCu == "Đã xử lý" || trangThaiCu == "Đã nhập kho" || trangThaiCu == "Đã hủy" || trangThaiCu == "Từ chối")
             {
-                throw new Exception("Không được sửa phiếu đã nhập kho hoặc đã hủy!");
+                throw new Exception($"Phiếu trả hàng đã ở trạng thái '{trangThaiCu}' (Kho đã duyệt / kết thúc), không được sửa đổi!");
             }
 
             if (!HopLeChuyenTrangThai(trangThaiCu, p.TrangThai))
             {
-                throw new Exception("Chỉ được chuyển trạng thái: Chờ xử lý → Đang thu hồi → Đã nhập kho (hoặc Đã hủy).");
+                throw new Exception("Chỉ được chuyển trạng thái: Chờ xử lý → Đang thu hồi → Đã xử lý (hoặc Đã hủy). Phiếu đã được Kho duyệt hoặc từ chối sẽ bị khóa trạng thái!");
             }
 
             if (trangThaiCu != "Chờ xử lý")
@@ -193,9 +214,9 @@ namespace ERP.BLL
                 throw new Exception("Yêu cầu lỗi này đã được tạo phiếu thu hồi trước đó!");
             }
 
-            if (p.TrangThai != "Đã hủy" && dal.CheckXeDangBan(p.BienSoXe.Trim(), p.ID_PhieuTra.Trim()))
+            if (p.TrangThai != "Đã hủy" && p.TrangThai != "Từ chối" && dal.CheckXeDangBan(p.BienSoXe.Trim(), p.ID_PhieuTra.Trim(), out string lyDoBan))
             {
-                throw new Exception($"Xe tải '{p.BienSoXe}' hiện đang được điều động cho lệnh thu hồi khác (chưa hoàn thành), không thể chọn xe này!");
+                throw new Exception(lyDoBan);
             }
 
             return dal.Update(p);
@@ -211,6 +232,11 @@ namespace ERP.BLL
             if (trangThai == "Đang lấy hàng")
             {
                 return "Đang thu hồi";
+            }
+
+            if (trangThai == "Đã nhập kho")
+            {
+                return "Đã xử lý";
             }
 
             return trangThai;
@@ -230,7 +256,7 @@ namespace ERP.BLL
 
             if (from == "Đang thu hồi")
             {
-                return to == "Đã nhập kho" || to == "Đã hủy";
+                return to == "Đã xử lý" || to == "Đã nhập kho" || to == "Đã hủy" || to == "Từ chối";
             }
 
             return false;

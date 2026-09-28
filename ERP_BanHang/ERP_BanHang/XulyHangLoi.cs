@@ -1,24 +1,46 @@
 ﻿using System;
 using System.Configuration;
 using System.Data;
-using Npgsql; // Đã đổi từ System.Data.SqlClient sang Npgsql
 using System.Drawing;
 using System.Windows.Forms;
+using Npgsql; // Kết nối PostgreSQL
 
 namespace ERP_BanHang
 {
     public partial class XulyHangLoi : Form
     {
         // Chuỗi kết nối PostgreSQL
-        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"].ConnectionString;
+        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"]?.ConnectionString
+            ?? ConfigurationManager.ConnectionStrings["ERP_BanHang"]?.ConnectionString;
+
         private DataTable dtYeuCau;
 
         // Trạng thái tab hiện tại: true = Cần xử lý (Chờ xử lý, Đang xử lý), false = Đã xử lý
         private bool isTabCanXuLy = true;
 
+        // Khai báo Timer để Auto Load dữ liệu ngầm
+        private Timer autoLoadTimer;
+
         public XulyHangLoi()
         {
             InitializeComponent();
+            KhoiTaoAutoLoadTimer(); // Khởi tạo bộ đếm Auto Load
+        }
+
+        // ==========================================
+        // CẤU HÌNH AUTO LOAD TIMER (5 GIÂY / LẦN)
+        // ==========================================
+        private void KhoiTaoAutoLoadTimer()
+        {
+            autoLoadTimer = new Timer();
+            autoLoadTimer.Interval = 5000; // Tải lại dữ liệu mỗi 5000ms (5 giây)
+            autoLoadTimer.Tick += AutoLoadTimer_Tick;
+        }
+
+        private void AutoLoadTimer_Tick(object sender, EventArgs e)
+        {
+            // Tự động reload danh sách yêu cầu hàng lỗi từ CSDL PostgreSQL
+            LoadDataYeuCauSauBanHang();
         }
 
         private void XulyHangLoi_Load(object sender, EventArgs e)
@@ -28,6 +50,41 @@ namespace ERP_BanHang
             KhoiTaoCotBang();
             LoadDataLoaiYeuCau();
             LoadDataYeuCauSauBanHang();
+
+            // Đăng ký sự kiện vòng đời Form để quản lý Timer
+            this.Activated += XulyHangLoi_Activated;
+            this.Deactivate += XulyHangLoi_Deactivate;
+            this.FormClosing += XulyHangLoi_FormClosing;
+
+            // Bắt đầu Auto Load
+            autoLoadTimer.Start();
+        }
+
+        // Tự động bật/tắt Timer khi chuyển Tab hoặc đóng Form để tối ưu bộ nhớ
+        private void XulyHangLoi_Activated(object sender, EventArgs e)
+        {
+            LoadDataYeuCauSauBanHang();
+            if (autoLoadTimer != null && !autoLoadTimer.Enabled)
+            {
+                autoLoadTimer.Start();
+            }
+        }
+
+        private void XulyHangLoi_Deactivate(object sender, EventArgs e)
+        {
+            if (autoLoadTimer != null)
+            {
+                autoLoadTimer.Stop();
+            }
+        }
+
+        private void XulyHangLoi_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (autoLoadTimer != null)
+            {
+                autoLoadTimer.Stop();
+                autoLoadTimer.Dispose();
+            }
         }
 
         private void KhoiTaoCotBang()
@@ -161,8 +218,18 @@ namespace ERP_BanHang
             }
         }
 
+        // ==========================================
+        // TẢI DỮ LIỆU TỪ POSTGRESQL (AUTO REFRESH)
+        // ==========================================
         private void LoadDataYeuCauSauBanHang()
         {
+            // Lưu lại vị trí dòng người dùng đang chọn để không bị giật con trỏ chuột khi auto reload
+            int currentRowIndex = -1;
+            if (BangYeuCau.CurrentRow != null)
+            {
+                currentRowIndex = BangYeuCau.CurrentRow.Index;
+            }
+
             string query = @"
                 SELECT 
                     YC.ID_YC,
@@ -189,14 +256,21 @@ namespace ERP_BanHang
                 {
                     conn.Open();
                     NpgsqlDataAdapter da = new NpgsqlDataAdapter(query, conn);
-                    dtYeuCau = new DataTable();
-                    da.Fill(dtYeuCau);
+                    DataTable dtTemp = new DataTable();
+                    da.Fill(dtTemp);
 
+                    dtYeuCau = dtTemp;
                     LocDuLieu();
+
+                    // Khôi phục vị trí dòng được chọn trước khi reload
+                    if (currentRowIndex >= 0 && currentRowIndex < BangYeuCau.Rows.Count)
+                    {
+                        BangYeuCau.Rows[currentRowIndex].Selected = true;
+                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    MessageBox.Show("Lỗi kết nối CSDL: " + ex.Message, "Lỗi PostgreSQL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    // Bỏ qua popup báo lỗi trong timer để không ngắt quãng trải nghiệm người dùng
                 }
             }
         }
@@ -410,29 +484,23 @@ namespace ERP_BanHang
             {
                 try
                 {
-                    // 1. Xóa file phiên làm việc tạm (nếu có)
                     string tempPath = System.IO.Path.Combine(Application.StartupPath, "session.txt");
                     if (System.IO.File.Exists(tempPath))
                     {
                         System.IO.File.Delete(tempPath);
                     }
 
-                    // 2. Thuật toán tìm file ERP_Khach.exe linh hoạt trên mọi máy
                     string baseDir = Application.StartupPath;
                     string targetExe = "ERP_Khach.exe";
                     string pathExeDangNhap = "";
 
-                    // Kiểm tra các vị trí file exe có thể nằm
                     string[] possiblePaths = new string[]
                     {
-                // Khi chạy Release / Đóng gói chung thư mục
-                System.IO.Path.Combine(baseDir, targetExe),
-                System.IO.Path.Combine(baseDir, "..", targetExe),
-                System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
-                
-                // Khi chạy Debug trong Visual Studio
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
-                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
+                        System.IO.Path.Combine(baseDir, targetExe),
+                        System.IO.Path.Combine(baseDir, "..", targetExe),
+                        System.IO.Path.Combine(baseDir, "..", "ERP_Khach", targetExe),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Debug\ERP_Khach.exe")),
+                        System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, @"..\..\..\..\ERP_Khach\bin\Release\ERP_Khach.exe"))
                     };
 
                     foreach (string p in possiblePaths)
@@ -444,11 +512,10 @@ namespace ERP_BanHang
                         }
                     }
 
-                    // 3. Khởi chạy ứng dụng đăng nhập và đóng ứng dụng hiện tại
                     if (!string.IsNullOrEmpty(pathExeDangNhap))
                     {
                         System.Diagnostics.Process.Start(pathExeDangNhap);
-                        Application.Exit(); // Đóng hoàn toàn ERP_BanHang
+                        Application.Exit();
                     }
                     else
                     {

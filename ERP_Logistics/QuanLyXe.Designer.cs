@@ -83,6 +83,7 @@
             this.btnDangNhap.TabIndex = 8;
             this.btnDangNhap.Text = "Đăng xuất";
             this.btnDangNhap.UseVisualStyleBackColor = true;
+            this.btnDangNhap.Click += new System.EventHandler(this.btnDangNhap_Click);
             // 
             // pnlUserBottom
             // 
@@ -383,7 +384,6 @@
             this.cboVehicleType.Name = "cboVehicleType";
             this.cboVehicleType.Size = new System.Drawing.Size(190, 29);
             this.cboVehicleType.TabIndex = 1;
-            this.cboVehicleType.SelectedIndexChanged += new System.EventHandler(this.cboVehicleType_SelectedIndexChanged);
             // 
             // txtSearch
             // 
@@ -421,6 +421,7 @@
             this.Controls.Add(this.pnlSidebar);
             this.Name = "QuanLyXe";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.Text = "Hệ thống ERP - Phân Hệ Vận Chuyển - Quản Lý Xe";
             this.Load += new System.EventHandler(this.QuanLyXe_Load);
             this.pnlSidebar.ResumeLayout(false);

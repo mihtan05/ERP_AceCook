@@ -14,24 +14,76 @@ namespace ERP
         public FrmCapNhatTrangThai(string id, string currentStatus)
         {
             InitializeComponent();
+            UIThemeHelper.ApplyFormStyle(this);
+            UIThemeHelper.ApplyActionButton(this.btnLuu, ButtonRole.Primary);
+            UIThemeHelper.ApplyActionButton(this.btnHuy, ButtonRole.Secondary);
             idDonVC = id;
             trangThaiHienTai = currentStatus;
 
             lblInfo.Text = $"Đơn vận chuyển: [{idDonVC}]";
             lblCurrent.Text = $"Trạng thái hiện tại: {trangThaiHienTai}";
 
-            if (cboTrangThaiMoi.Items.Contains(trangThaiHienTai))
+            // Thiết lập danh sách trạng thái kế tiếp hợp lệ theo mô hình State Machine
+            cboTrangThaiMoi.Items.Clear();
+
+            if (trangThaiHienTai == "Hoàn thành")
             {
-                cboTrangThaiMoi.SelectedItem = trangThaiHienTai;
-            }
-            else if (cboTrangThaiMoi.Items.Count > 0)
-            {
+                cboTrangThaiMoi.Items.Add("Hoàn thành");
                 cboTrangThaiMoi.SelectedIndex = 0;
+                cboTrangThaiMoi.Enabled = false;
+                btnLuu.Enabled = false;
+                btnLuu.Text = "🔒 Đã hoàn tất";
+                lblCurrent.Text = $"Trạng thái: {trangThaiHienTai} 🔒 (Không được thay đổi)";
+                lblCurrent.ForeColor = System.Drawing.Color.ForestGreen;
+            }
+            else if (trangThaiHienTai == "Đã hủy")
+            {
+                cboTrangThaiMoi.Items.Add("Đã hủy");
+                cboTrangThaiMoi.SelectedIndex = 0;
+                cboTrangThaiMoi.Enabled = false;
+                btnLuu.Enabled = false;
+                btnLuu.Text = "🚫 Đã hủy";
+                lblCurrent.Text = $"Trạng thái: {trangThaiHienTai} 🚫 (Không thể thay đổi)";
+                lblCurrent.ForeColor = System.Drawing.Color.Crimson;
+            }
+            else if (trangThaiHienTai == "Khởi tạo")
+            {
+                // Từ Khởi tạo -> chỉ có thể sang 'Đang vận chuyển' hoặc 'Đã hủy'
+                cboTrangThaiMoi.Items.Add("Đang vận chuyển");
+                cboTrangThaiMoi.Items.Add("Đã hủy");
+                cboTrangThaiMoi.SelectedIndex = 0;
+            }
+            else if (trangThaiHienTai == "Đang vận chuyển")
+            {
+                // Từ Đang vận chuyển -> chỉ có thể sang 'Hoàn thành' hoặc 'Đã hủy' (không thể quay về 'Khởi tạo')
+                cboTrangThaiMoi.Items.Add("Hoàn thành");
+                cboTrangThaiMoi.Items.Add("Đã hủy");
+                cboTrangThaiMoi.SelectedIndex = 0;
+            }
+            else
+            {
+                cboTrangThaiMoi.Items.Add("Khởi tạo");
+                cboTrangThaiMoi.Items.Add("Đang vận chuyển");
+                cboTrangThaiMoi.Items.Add("Hoàn thành");
+                cboTrangThaiMoi.Items.Add("Đã hủy");
+                cboTrangThaiMoi.SelectedItem = trangThaiHienTai;
             }
         }
 
         private void btnLuu_Click(object sender, EventArgs e)
         {
+            if (trangThaiHienTai == "Hoàn thành")
+            {
+                MessageBox.Show("Đơn vận chuyển đã HOÀN THÀNH nên không thể thay đổi trạng thái!\n\nNếu khách hàng muốn đổi trả hàng, vui lòng sử dụng chức năng 'Quản lý trả hàng' để lập phiếu thu hồi.", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (trangThaiHienTai == "Đã hủy")
+            {
+                MessageBox.Show("Đơn vận chuyển đã ĐÃ HỦY nên không thể thay đổi trạng thái!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             if (cboTrangThaiMoi.SelectedItem == null)
             {
                 MessageBox.Show("Vui lòng chọn trạng thái mới!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -42,6 +94,19 @@ namespace ERP
             if (statusMoi == trangThaiHienTai)
             {
                 MessageBox.Show("Trạng thái mới trùng với trạng thái hiện tại!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // Kiểm tra quy tắc chuyển đổi trạng thái
+            if (trangThaiHienTai == "Khởi tạo" && statusMoi == "Hoàn thành")
+            {
+                MessageBox.Show("Đơn vận chuyển chưa xuất phát ('Khởi tạo') không thể chuyển trực tiếp sang 'Hoàn thành'!\nVui lòng chuyển sang 'Đang vận chuyển' trước khi hoàn tất giao hàng.", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (trangThaiHienTai == "Đang vận chuyển" && statusMoi == "Khởi tạo")
+            {
+                MessageBox.Show("Đơn vận chuyển đã rời kho ('Đang vận chuyển') không thể quay ngược về trạng thái 'Khởi tạo'!", "Cảnh báo nghiệp vụ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

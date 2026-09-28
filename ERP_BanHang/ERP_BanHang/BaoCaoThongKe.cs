@@ -1,4 +1,4 @@
-using Npgsql;
+﻿using Npgsql;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 using System;
@@ -12,7 +12,8 @@ namespace ERP_BanHang
 {
     public partial class BaoCaoThongKe : Form
     {
-        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"].ConnectionString;
+        private string connectionString = ConfigurationManager.ConnectionStrings["ERP_Connection"]?.ConnectionString
+            ?? ConfigurationManager.ConnectionStrings["ERP_BanHang"]?.ConnectionString;
 
         public BaoCaoThongKe()
         {
@@ -33,14 +34,26 @@ namespace ERP_BanHang
                 cboReportType.SelectedIndex = 0;
             }
 
-            TaiTongQuanKPI();
-            TaiDuLieuBaoCao();
+            // Tải dữ liệu KPI và Bảng báo cáo lần đầu
+            TaiDuLieuTheoBoLoc();
         }
 
         // ==========================================
-        // 1. TÍNH TOÁN CÁC THẺ KPI TỔNG QUAN
+        // TẢI TẤT CẢ DỮ LIỆU THEO BỘ LỌC THỜI GIAN
         // ==========================================
-        private void TaiTongQuanKPI()
+        private void TaiDuLieuTheoBoLoc()
+        {
+            DateTime tuNgay = dtpFromDate.Value.Date;
+            DateTime denNgay = dtpToDate.Value.Date.AddDays(1).AddSeconds(-1);
+
+            TaiTongQuanKPITheoThoiGian(tuNgay, denNgay);
+            TaiDuLieuBaoCao(tuNgay, denNgay);
+        }
+
+        // ==========================================
+        // 1. TÍNH TOÁN CÁC THẺ KPI THEO KHOẢNG THỜI GIAN
+        // ==========================================
+        private void TaiTongQuanKPITheoThoiGian(DateTime tuNgay, DateTime denNgay)
         {
             using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
             {
@@ -48,26 +61,48 @@ namespace ERP_BanHang
                 {
                     conn.Open();
 
-                    // KPI 1: Tổng doanh thu từ bảng HoaDon
-                    string queryDoanhThu = "SELECT COALESCE(SUM(TongTien), 0) FROM HoaDon WHERE TrangThai = N'Đã thanh toán'";
+                    // KPI 1: Tổng tiền hóa đơn "Đã thanh toán" trong khoảng thời gian lọc
+                    string queryDoanhThu = @"
+                        SELECT COALESCE(SUM(HD.TongTien), 0) 
+                        FROM HoaDon HD
+                        LEFT JOIN DonHang DH ON HD.ID_DH = DH.ID_DH
+                        WHERE HD.TrangThai = N'Đã thanh toán' 
+                          AND DH.NgayTao >= @TuNgay AND DH.NgayTao <= @DenNgay";
+
                     using (NpgsqlCommand cmd1 = new NpgsqlCommand(queryDoanhThu, conn))
                     {
+                        cmd1.Parameters.AddWithValue("@TuNgay", tuNgay);
+                        cmd1.Parameters.AddWithValue("@DenNgay", denNgay);
                         decimal tongDoanhThu = Convert.ToDecimal(cmd1.ExecuteScalar());
                         lblKPI1Value.Text = string.Format("{0:#,##0} VNĐ", tongDoanhThu);
                     }
 
-                    // KPI 2: Số đơn hàng đã giao thành công
-                    string queryDonHang = "SELECT COUNT(DISTINCT ID_DH) FROM GiaoHang WHERE TrangThaiGiaoHang = N'Đã giao' OR TrangThaiGiaoHang = N'Hoàn thành'";
+                    // KPI 2: Số đơn hàng thành công trong khoảng thời gian lọc
+                    string queryDonHang = @"
+                        SELECT COUNT(DISTINCT GH.ID_DH) 
+                        FROM GiaoHang GH
+                        LEFT JOIN DonHang DH ON GH.ID_DH = DH.ID_DH
+                        WHERE (GH.TrangThaiGiaoHang = N'Đã giao' OR GH.TrangThaiGiaoHang = N'Hoàn thành')
+                          AND DH.NgayTao >= @TuNgay AND DH.NgayTao <= @DenNgay";
+
                     using (NpgsqlCommand cmd2 = new NpgsqlCommand(queryDonHang, conn))
                     {
+                        cmd2.Parameters.AddWithValue("@TuNgay", tuNgay);
+                        cmd2.Parameters.AddWithValue("@DenNgay", denNgay);
                         int donHoanThanh = Convert.ToInt32(cmd2.ExecuteScalar());
                         lblKPI2Value.Text = donHoanThanh.ToString("#,##0") + " đơn";
                     }
 
-                    // KPI 3: Số yêu cầu sau bán hàng
-                    string queryYeuCau = "SELECT COUNT(*) FROM YeuCauSauBanHang";
+                    // KPI 3: Số yêu cầu sau bán hàng trong khoảng thời gian lọc
+                    string queryYeuCau = @"
+                        SELECT COUNT(*) 
+                        FROM YeuCauSauBanHang 
+                        WHERE NgayYeuCau >= @TuNgay AND NgayYeuCau <= @DenNgay";
+
                     using (NpgsqlCommand cmd3 = new NpgsqlCommand(queryYeuCau, conn))
                     {
+                        cmd3.Parameters.AddWithValue("@TuNgay", tuNgay);
+                        cmd3.Parameters.AddWithValue("@DenNgay", denNgay);
                         int soYeuCau = Convert.ToInt32(cmd3.ExecuteScalar());
                         lblKPI3Value.Text = soYeuCau.ToString("#,##0") + " yêu cầu";
                     }
@@ -84,11 +119,8 @@ namespace ERP_BanHang
         // ==========================================
         // 2. LẤY DỮ LIỆU BÁO CÁO THEO BỘ LỌC
         // ==========================================
-        private void TaiDuLieuBaoCao()
+        private void TaiDuLieuBaoCao(DateTime tuNgay, DateTime denNgay)
         {
-            DateTime tuNgay = dtpFromDate.Value.Date;
-            DateTime denNgay = dtpToDate.Value.Date.AddDays(1).AddSeconds(-1);
-
             dgvData.Columns.Clear();
             dgvData.AutoGenerateColumns = false;
 
@@ -137,7 +169,7 @@ namespace ERP_BanHang
                                 YC.ID_YC,
                                 YC.ID_DH,
                                 KH.TenDoanhNghiep AS TenKhachHang,
-                                H.TenHang AS TenSanPham,
+                                HH.TenHang AS TenSanPham,
                                 CTYC.SoLuong,
                                 CTYC.TinhTrang,
                                 YC.LoaiYeuCau,
@@ -146,7 +178,7 @@ namespace ERP_BanHang
                             FROM YeuCauSauBanHang YC
                             LEFT JOIN ChiTietYeuCau CTYC ON YC.ID_YC = CTYC.ID_YC
                             LEFT JOIN SanPham SP ON CTYC.ID_SP = SP.ID_SP
-                            LEFT JOIN HangHoa H ON SP.MaHang = H.MaHang
+                            LEFT JOIN HangHoa HH ON SP.MaHang = HH.MaHang
                             LEFT JOIN KhachHang KH ON YC.ID_KH = KH.ID_KH
                             WHERE YC.NgayYeuCau >= @TuNgay AND YC.NgayYeuCau <= @DenNgay
                             ORDER BY YC.NgayYeuCau DESC";
@@ -316,7 +348,7 @@ namespace ERP_BanHang
         // ==========================================
         private void cboReportType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            TaiDuLieuBaoCao();
+            TaiDuLieuTheoBoLoc();
         }
 
         private void btnFilter_Click(object sender, EventArgs e)
@@ -326,7 +358,9 @@ namespace ERP_BanHang
                 MessageBox.Show("Từ ngày không được lớn hơn Đến ngày!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            TaiDuLieuBaoCao();
+
+            // Tải lại cả KPI lẫn dữ liệu Bảng
+            TaiDuLieuTheoBoLoc();
         }
 
         private void btnExportExcel_Click(object sender, EventArgs e)
@@ -337,9 +371,6 @@ namespace ERP_BanHang
                 return;
             }
 
-            // =========================================================================
-            // THIẾT LẬP CẤU HÌNH LICENSE CHO EPPLUS ĐỂ TRÁNH LỖI LICENSE KHI XUẤT FILE
-            // =========================================================================
             ExcelPackage.License.SetNonCommercialPersonal("Acecook ERP");
 
             using (SaveFileDialog sfd = new SaveFileDialog())
@@ -359,41 +390,31 @@ namespace ERP_BanHang
                             string sheetName = cboReportType.SelectedIndex == 0 ? "Doanh Thu Đơn Hàng" : "Yêu Cầu Sau Bán Hàng";
                             ExcelWorksheet ws = package.Workbook.Worksheets.Add(sheetName);
 
-                            // Hiển thị đường lưới trang tính
                             ws.View.ShowGridLines = true;
 
-                            // -------------------------------------------------------------
-                            // 1. BANNER TIÊU ĐỀ BÁO CÁO (HEADER)
-                            // -------------------------------------------------------------
                             int totalCols = dgvData.Columns.Count;
 
-                            // Tên doanh nghiệp
                             ws.Cells[2, 2].Value = "CÔNG TY CỔ PHẦN ACECOOK VIỆT NAM";
                             ws.Cells[2, 2].Style.Font.Bold = true;
                             ws.Cells[2, 2].Style.Font.Size = 11;
                             ws.Cells[2, 2].Style.Font.Color.SetColor(Color.FromArgb(108, 117, 125));
 
-                            // Tiêu đề báo cáo
                             ws.Cells[3, 2, 3, totalCols + 1].Merge = true;
                             ws.Cells[3, 2].Value = cboReportType.SelectedIndex == 0
-                                ? "BÁO CÁO DOANH THU BÁN HÀNG CHITIẾT"
+                                ? "BÁO CÁO DOANH THU BÁN HÀNG CHI TIẾT"
                                 : "BÁO CÁO YÊU CẦU SAU BÁN HÀNG & LỖI SẢN PHẨM";
                             ws.Cells[3, 2].Style.Font.Bold = true;
                             ws.Cells[3, 2].Style.Font.Size = 16;
-                            ws.Cells[3, 2].Style.Font.Color.SetColor(Color.FromArgb(220, 53, 69)); // Đỏ Acecook
+                            ws.Cells[3, 2].Style.Font.Color.SetColor(Color.FromArgb(220, 53, 69));
                             ws.Cells[3, 2].Style.HorizontalAlignment = ExcelHorizontalAlignment.Left;
 
-                            // Kỳ báo cáo
                             ws.Cells[4, 2].Value = $"Kỳ báo cáo: Từ ngày {dtpFromDate.Value:dd/MM/yyyy} đến ngày {dtpToDate.Value:dd/MM/yyyy}";
                             ws.Cells[4, 2].Style.Font.Italic = true;
                             ws.Cells[4, 2].Style.Font.Size = 10;
                             ws.Cells[4, 2].Style.Font.Color.SetColor(Color.Gray);
 
-                            // -------------------------------------------------------------
-                            // 2. CỘT TIÊU ĐỀ (HEADER COLUMNS)
-                            // -------------------------------------------------------------
                             int startRow = 6;
-                            int startCol = 2; // Cột B
+                            int startCol = 2;
 
                             for (int i = 0; i < dgvData.Columns.Count; i++)
                             {
@@ -404,16 +425,13 @@ namespace ERP_BanHang
                                 cell.Style.Font.Size = 10;
                                 cell.Style.Font.Color.SetColor(Color.White);
                                 cell.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                                cell.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(13, 110, 253)); // Xanh Primary
+                                cell.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(13, 110, 253));
                                 cell.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                                 cell.Style.VerticalAlignment = ExcelVerticalAlignment.Center;
                                 cell.Style.Border.BorderAround(ExcelBorderStyle.Thin, Color.FromArgb(222, 226, 230));
                             }
                             ws.Row(startRow).Height = 28;
 
-                            // -------------------------------------------------------------
-                            // 3. ĐỔ DỮ LIỆU TỪ DATAGRIDVIEW
-                            // -------------------------------------------------------------
                             int currentRow = startRow + 1;
                             for (int r = 0; r < dgvData.Rows.Count; r++)
                             {
@@ -454,7 +472,6 @@ namespace ERP_BanHang
                                         }
                                     }
 
-                                    // Zebra Striping (Tô màu dòng xen kẽ)
                                     if (r % 2 == 1)
                                     {
                                         cell.Style.Fill.PatternType = ExcelFillStyle.Solid;
@@ -467,9 +484,6 @@ namespace ERP_BanHang
                                 currentRow++;
                             }
 
-                            // -------------------------------------------------------------
-                            // 4. DÒNG TỔNG CỘNG
-                            // -------------------------------------------------------------
                             if (cboReportType.SelectedIndex == 0)
                             {
                                 ws.Row(currentRow).Height = 25;
@@ -496,9 +510,6 @@ namespace ERP_BanHang
                                 currentRow += 2;
                             }
 
-                            // -------------------------------------------------------------
-                            // 5. KHU VỰC CHỮ KÝ
-                            // -------------------------------------------------------------
                             int signRow = currentRow + 1;
 
                             ws.Cells[signRow, startCol + 1].Value = "NGƯỜI LẬP BÁO CÁO";
@@ -519,9 +530,6 @@ namespace ERP_BanHang
                             ws.Cells[signRow + 1, totalCols].Style.Font.Size = 9;
                             ws.Cells[signRow + 1, totalCols].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
-                            // -------------------------------------------------------------
-                            // 6. TỰ ĐỘNG CĂN CHỈNH ĐỘ RỘNG CỘT (AUTOFIT)
-                            // -------------------------------------------------------------
                             for (int col = 1; col <= totalCols + 2; col++)
                             {
                                 ws.Column(col).AutoFit();
@@ -606,14 +614,12 @@ namespace ERP_BanHang
             {
                 try
                 {
-                    // 1. Xóa file phiên làm việc tạm (nếu có)
                     string tempPath = System.IO.Path.Combine(Application.StartupPath, "session.txt");
                     if (System.IO.File.Exists(tempPath))
                     {
                         System.IO.File.Delete(tempPath);
                     }
 
-                    // 2. Thuật toán tìm file ERP_Khach.exe linh hoạt
                     string baseDir = Application.StartupPath;
                     string targetExe = "ERP_Khach.exe";
                     string pathExeDangNhap = "";
@@ -636,7 +642,6 @@ namespace ERP_BanHang
                         }
                     }
 
-                    // 3. Khởi chạy ứng dụng đăng nhập và đóng ứng dụng hiện tại
                     if (!string.IsNullOrEmpty(pathExeDangNhap))
                     {
                         System.Diagnostics.Process.Start(pathExeDangNhap);

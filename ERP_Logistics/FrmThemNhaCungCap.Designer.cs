@@ -31,8 +31,6 @@
             this.dtpNgayCap = new System.Windows.Forms.DateTimePicker();
             this.lblNgayHetHan = new System.Windows.Forms.Label();
             this.dtpNgayHetHan = new System.Windows.Forms.DateTimePicker();
-            this.lblFileScan = new System.Windows.Forms.Label();
-            this.txtFileScan = new System.Windows.Forms.TextBox();
             this.btnLuu = new System.Windows.Forms.Button();
             this.btnHuy = new System.Windows.Forms.Button();
             this.SuspendLayout();
@@ -171,40 +169,24 @@
             this.dtpNgayHetHan.Size = new System.Drawing.Size(300, 23);
             this.dtpNgayHetHan.TabIndex = 15;
             // 
-            // lblFileScan
-            // 
-            this.lblFileScan.AutoSize = true;
-            this.lblFileScan.Location = new System.Drawing.Point(30, 350);
-            this.lblFileScan.Name = "lblFileScan";
-            this.lblFileScan.Size = new System.Drawing.Size(56, 15);
-            this.lblFileScan.TabIndex = 16;
-            this.lblFileScan.Text = "File Scan:";
-            // 
-            // txtFileScan
-            // 
-            this.txtFileScan.Location = new System.Drawing.Point(140, 347);
-            this.txtFileScan.Name = "txtFileScan";
-            this.txtFileScan.Size = new System.Drawing.Size(300, 23);
-            this.txtFileScan.TabIndex = 17;
-            // 
             // btnLuu
             // 
             this.btnLuu.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(13)))), ((int)(((byte)(110)))), ((int)(((byte)(253)))));
             this.btnLuu.ForeColor = System.Drawing.Color.White;
-            this.btnLuu.Location = new System.Drawing.Point(234, 400);
+            this.btnLuu.Location = new System.Drawing.Point(234, 360);
             this.btnLuu.Name = "btnLuu";
             this.btnLuu.Size = new System.Drawing.Size(100, 35);
-            this.btnLuu.TabIndex = 18;
+            this.btnLuu.TabIndex = 16;
             this.btnLuu.Text = "Lưu";
             this.btnLuu.UseVisualStyleBackColor = false;
             this.btnLuu.Click += new System.EventHandler(this.btnLuu_Click);
             // 
             // btnHuy
             // 
-            this.btnHuy.Location = new System.Drawing.Point(340, 400);
+            this.btnHuy.Location = new System.Drawing.Point(340, 360);
             this.btnHuy.Name = "btnHuy";
             this.btnHuy.Size = new System.Drawing.Size(100, 35);
-            this.btnHuy.TabIndex = 19;
+            this.btnHuy.TabIndex = 17;
             this.btnHuy.Text = "Hủy";
             this.btnHuy.UseVisualStyleBackColor = true;
             this.btnHuy.Click += new System.EventHandler(this.btnHuy_Click);
@@ -213,11 +195,9 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(484, 461);
+            this.ClientSize = new System.Drawing.Size(484, 420);
             this.Controls.Add(this.btnHuy);
             this.Controls.Add(this.btnLuu);
-            this.Controls.Add(this.txtFileScan);
-            this.Controls.Add(this.lblFileScan);
             this.Controls.Add(this.dtpNgayHetHan);
             this.Controls.Add(this.lblNgayHetHan);
             this.Controls.Add(this.dtpNgayCap);
@@ -259,8 +239,6 @@
         private System.Windows.Forms.DateTimePicker dtpNgayCap;
         private System.Windows.Forms.Label lblNgayHetHan;
         private System.Windows.Forms.DateTimePicker dtpNgayHetHan;
-        private System.Windows.Forms.Label lblFileScan;
-        private System.Windows.Forms.TextBox txtFileScan;
         private System.Windows.Forms.Button btnLuu;
         private System.Windows.Forms.Button btnHuy;
     }

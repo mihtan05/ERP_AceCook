@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks>net48;net472;net8.0-windows</TargetFrameworks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>KeToanTaiChinh</RootNamespace>
+    <AssemblyName>KE_TOAN_TAI_CHINH</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+    <NoWin32Manifest>true</NoWin32Manifest>
+    <NoWarn>$(NoWarn);CA1416;NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48' Or '$(TargetFramework)' == 'net472'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="System.Configuration" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="4.1.12" />
+  </ItemGroup>
+</Project>

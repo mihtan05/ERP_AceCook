@@ -83,6 +83,7 @@
             this.btnDangNhap.TabIndex = 8;
             this.btnDangNhap.Text = "Đăng xuất";
             this.btnDangNhap.UseVisualStyleBackColor = true;
+            this.btnDangNhap.Click += new System.EventHandler(this.btnDangNhap_Click);
             // 
             // pnlUserBottom
             // 
@@ -421,6 +422,7 @@
             this.Controls.Add(this.pnlSidebar);
             this.Name = "QuanLyDonVanChuyen";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.Text = "Hệ thống ERP - Phân Hệ Vận Chuyển - Quản Lý Đơn Vận Chuyển";
             this.Load += new System.EventHandler(this.QuanLyDonVanChuyen_Load);
             this.pnlSidebar.ResumeLayout(false);
